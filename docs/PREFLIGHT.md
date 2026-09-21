@@ -219,14 +219,17 @@ pitch, and it is the difference between "we measured it" and "we assumed it".
 
 | Quantity | Spike assumed | Measured | Consequence |
 |---|---|---|---|
-| Magnetometer rate | 100 Hz nominal | ________ | |
-| Timing jitter | 15% | ________ | |
-| Sensor noise | 0.5 uT RMS | ________ | |
+| Magnetometer rate | 100 Hz nominal | **105.3 Hz** (dev phone, 21 Sep) | 21 distinct phases — safe |
+| Timing jitter | 15% | **~0%** | irrelevant at 21 phases |
+| Sensor noise | 0.5 uT RMS | **0.39 uT** | better than assumed |
 | Resolution | 0.15 uT | ________ | |
-| Field at 3 cm | 9.43 uT/A | ________ | |
-| Min detectable, hand-held | 0.05 A | ________ | |
-| Audio source | UNPROCESSED | ________ | |
+| Field at 3 cm | 9.43 uT/A | ________ | **the open question** |
+| Min detectable, hand-held | 0.05 A | **0.02 A** (re-run with 0.39) | 2.5x better |
+| Audio source | UNPROCESSED | **refused, fell back to MIC** | check the arc band survives |
 | Ballast false alarm | 4% | ________ | |
+
+*Rows filled from a developer phone on 21 Sept. Repeat on the loaner — the numbers
+above are not the iQOO's.*
 
 ```
 Anything the spike got wrong:

@@ -82,14 +82,19 @@ fun PreCheckScreen(state: PreCheckState, onRun: () -> Unit, onContinue: () -> Un
             ),
         )
 
+        // Jitter only matters when the rate is close to a locked one. With enough
+        // distinct phases, perfectly uniform sampling is fine, and warning about it
+        // teaches the technician to ignore the screen.
         CheckRow(
             "Timing jitter",
-            state.magJitter > 0.01,
+            state.magJitter > 0.01 || phases >= 3,
             "%.1f%% of the interval%s".format(
                 state.magJitter * 100,
-                // Counter-intuitive enough to be worth saying on screen.
-                if (state.magJitter > 0.01) " — good, jitter breaks harmonic lock" else
-                    " — very uniform; check the rate is not 10, 20, 25, 50 or 100 Hz",
+                when {
+                    state.magJitter > 0.01 -> " — jitter also breaks harmonic lock"
+                    phases >= 3 -> " — uniform, but $phases phases is plenty"
+                    else -> " — uniform AND too few phases; the rate must change"
+                },
             ),
         )
 
