@@ -223,7 +223,7 @@ pitch, and it is the difference between "we measured it" and "we assumed it".
 | Timing jitter | 15% | **~0%** | irrelevant at 21 phases |
 | Sensor noise | 0.5 uT RMS | **0.39 uT** | better than assumed |
 | Resolution | 0.15 uT | ________ | |
-| Field at 3 cm | 9.43 uT/A | **confirmed present** (21 Sep) | see note |
+| Field at 3 cm | 9.43 uT/A | **NOT CONFIRMED** | still the open question |
 | Min detectable, hand-held | 0.05 A | **0.02 A** (re-run with 0.39) | 2.5x better |
 | Audio source | UNPROCESSED | **refused, fell back to MIC** | check the arc band survives |
 | Ballast false alarm | 4% | ________ | |
@@ -231,12 +231,37 @@ pitch, and it is the difference between "we measured it" and "we assumed it".
 *Rows filled from a developer phone on 21 Sept. Repeat on the loaner — the numbers
 above are not the iQOO's.*
 
-**§3 outcome: PASS, at the floor.** A laptop charger (~0.3 A through a twin cable,
-coiled) gave **6x contrast with current flowing against 1x without**, field
-amplitude 0.08 uT. The detector separates in the right direction on real hardware,
-so the premise holds. The margin is small because the source is about the weakest
-available: twin-cable cancellation plus a third of an amp. Repeat against a real
-load on a separated conductor before trusting the sensitivity figure.
+**§3 outcome: INCONCLUSIVE — the test detected nothing.**
+
+First reading of this was wrong and is corrected here. The three captures against a
+coiled laptop charger cable were:
+
+| state | contrast | confidence | field |
+|---|---|---|---|
+| charger OFF (baseline) | — | 0.24 | — |
+| charger OFF | 6x | 0.39 | 0.08 uT |
+| charger ON | 1x | 0.13 | 0.05 uT |
+
+The largest reading came with **no current flowing**, and the charger-on reading was
+the lowest of the three. There is no relationship between the load and the
+statistic; the spread from 1x to 6x is noise.
+
+Two things follow.
+
+**The premise is still unproven.** Not disproven either — roughly a third of an amp
+through a twin cable whose conductors largely cancel is close to the weakest source
+that could have been chosen. The test was too insensitive to decide anything.
+
+**Real noise has structure the simulation does not.** `spike/audio` and `spike/dsp`
+model the no-signal case as reaching about 1.2x contrast. On a real phone in a real
+room it reached 6x. Whatever produces that — switching supplies nearby, the phone's
+own electronics, motion at unlucky frequencies — the detection threshold currently
+sits *inside* that range, which is why a null reading raised a CRITICAL.
+
+**Before this can be called settled**, repeat against a load of at least 5 A on a
+conductor where live and neutral are separated: an electric iron, a kettle, an
+induction cooktop, or an actual distribution board. And take several captures in
+each state rather than one, so the spread is visible rather than inferred.
 
 ```
 Anything the spike got wrong:
