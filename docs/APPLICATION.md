@@ -114,12 +114,15 @@ It didn't.
 | Arc | 4–16 kHz band → envelope → power at 100 Hz, normalised |
 | Scoring | Median and MAD against the circuit's own reference |
 | Explanation | Rules table over six faults, each with evidence and an action |
-| Learning | Nearest-centroid classifier trained on the technician's own labels |
-| Advice | Qwen3-1.7B on the Hexagon NPU, only for unrecognised patterns |
+| Learning | Nearest-centroid classifier, trained on-device from the technician's own labels |
 
 **Built:** native Android, Kotlin, Compose. **44 of 44 logic checks pass**; the app
-builds to a 9.1 MB APK. No `INTERNET` permission in the manifest — a claim
+builds to a 9.3 MB APK. No `INTERNET` permission in the manifest — a claim
 reviewable in thirty seconds.
+
+**What is not built:** a local language model for plain-language advice. It is
+planned for the build window; nothing in the app calls one today, and we would
+rather say so than have it found.
 
 ---
 
@@ -162,7 +165,8 @@ organiser at check-in.
 
 Priority order: capture and pre-check, per-circuit reference and scoring, the fault
 catalogue, the result screen. Then calibration against a known load, which is what
-turns the index into amperes.
+turns the index into amperes. If those are solid, a small local language model on
+the NPU for plain-language advice — as a stretch, and only if it earns its place.
 
 We would rather demo one board that works than five features that half-work.
 
