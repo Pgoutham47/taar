@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
@@ -39,7 +40,7 @@ fun InstallationListScreen(
 ) {
     var newName by remember { mutableStateOf("") }
 
-    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(Modifier.safeDrawingPadding().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Boards", style = MaterialTheme.typography.headlineSmall)
 
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -92,7 +93,7 @@ fun CircuitEditorScreen(
     var circuits by remember(installation.id) { mutableStateOf(installation.circuits) }
     var newLabel by remember { mutableStateOf("") }
 
-    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(Modifier.safeDrawingPadding().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Edit board", style = MaterialTheme.typography.headlineSmall)
 
         OutlinedTextField(name, { name = it }, label = { Text("Board name") },
@@ -191,7 +192,7 @@ fun HistoryScreen(
     circuitLabels: Map<String, String>,
     onBack: () -> Unit,
 ) {
-    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(Modifier.safeDrawingPadding().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("History", style = MaterialTheme.typography.headlineSmall)
         Text("${readings.size} readings. Labelled ones calibrate the thresholds.",
             style = MaterialTheme.typography.bodySmall)
