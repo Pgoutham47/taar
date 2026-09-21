@@ -44,10 +44,27 @@ of response time cannot have a network round trip inside it.
 | | |
 |---|---|
 | [`HACKATHON.md`](HACKATHON.md) | Rules position, build order, Red/Green tagging, HackTracker checklist, demo fallback tree |
-| [`docs/PREFLIGHT.md`](docs/PREFLIGHT.md) | The hour-one measurement form. Two entries can stop the project |
+| [`docs/APPLICATION.md`](docs/APPLICATION.md) | The screening application, in pasteable blocks |
+| [`docs/PREFLIGHT.md`](docs/PREFLIGHT.md) | The hour-one measurement form, with the hardware results filled in |
 | [`spike/dsp/`](spike/dsp/) | Can a phone magnetometer see 50 Hz? |
 | [`spike/audio/`](spike/audio/) | Does an arc separate from a ballast, speech, a rustle and a motor? |
 | [`spike/android/`](spike/android/) | The app — builds clean, 36/36 logic checks pass |
+
+---
+
+## Measured on hardware
+
+Six captures against a fridge supply cable, phone taped in place:
+
+| state | contrast at 50 Hz |
+|---|---|
+| no current | 3× · 2× · 2× |
+| compressor running | **9× · 16×** |
+
+A factor of three, no overlap. The live threshold is set from that separation rather
+than from simulation. Magnetometer measured at 105.3 Hz over 21 distinct phases;
+noise floor 0.39–0.40 µT RMS. Full record and caveats in
+[`docs/PREFLIGHT.md`](docs/PREFLIGHT.md) §3.
 
 ---
 
