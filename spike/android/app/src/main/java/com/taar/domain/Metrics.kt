@@ -40,13 +40,24 @@ data class Metrics(
          */
         const val LIVE_CONFIDENCE = 0.30
 
+        /**
+         * Floors for the baseline spread, at roughly a magnetometer's reported
+         * resolution and the arc statistic's own quantisation. Below these, a
+         * baseline is flat because the sensor cannot see finer, not because the
+         * circuit is exceptionally steady.
+         */
+        const val MIN_FIELD_SPREAD_UT = 0.15
+        const val MIN_ARC_SPREAD = 0.002
+
         fun derive(reading: Reading, circuit: Circuit): Metrics? {
             val baseline = circuit.baseline ?: return null
             if (!baseline.isSufficient) return null
 
             val loadZ = if (reading.fieldEstimateUsable)
-                Stats.robustZ(reading.fieldAmplitudeUt, baseline.fieldAmplitudesUt) else 0.0
-            val arcZ = Stats.robustZ(reading.arcModulationIndex, baseline.arcModulationIndices)
+                Stats.robustZ(reading.fieldAmplitudeUt, baseline.fieldAmplitudesUt,
+                    MIN_FIELD_SPREAD_UT) else 0.0
+            val arcZ = Stats.robustZ(reading.arcModulationIndex, baseline.arcModulationIndices,
+                MIN_ARC_SPREAD)
 
             val current = circuit.utPerAmp
                 ?.takeIf { it > 0 && reading.fieldEstimateUsable }

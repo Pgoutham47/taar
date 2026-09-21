@@ -60,9 +60,14 @@ object Stats {
      * Returns 0 when the spread is zero, rather than infinity: identical readings
      * mean no information, not infinite confidence.
      */
-    fun robustZ(value: Double, reference: DoubleArray): Double {
+    fun robustZ(value: Double, reference: DoubleArray, minSpread: Double = 0.0): Double {
         if (reference.size < 2) return 0.0
-        val spread = mad(reference)
+        // A baseline can be flatter than the sensor can actually resolve -- three
+        // captures of a quiet circuit may all report the same value. Dividing by
+        // that spread turns sensor quantisation into a large z-score and a
+        // confident wrong answer. Found on hardware: a 0.21 uT change reported as
+        // 71 MAD above baseline.
+        val spread = maxOf(mad(reference), minSpread)
         if (spread <= 0.0) return 0.0
         return (value - median(reference)) / spread
     }

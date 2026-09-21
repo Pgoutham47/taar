@@ -37,6 +37,8 @@ object DomainChecks {
         classifierRefusesWhenClassesOverlap(),
         classifierScalesFeaturesSoOneCannotDominate(),
         classifierWithNoTrainingReturnsNothing(),
+        flatBaselineDoesNotManufactureHugeZScores(),
+        aRealChangeStillScoresAgainstAFlatBaseline(),
     )
 
     private fun check(name: String, block: () -> String?): Result =
@@ -388,6 +390,29 @@ object DomainChecks {
             else -> null
         }
     }
+
+    // ---- regressions from hardware ----
+
+    fun flatBaselineDoesNotManufactureHugeZScores() =
+        check("a baseline flatter than the sensor cannot produce a huge z") {
+            // Three captures of a quiet circuit, all identical to the resolution
+            // the sensor reports. Observed on a real phone.
+            val flat = doubleArrayOf(0.0, 0.0, 0.0, 0.0)
+            val z = Stats.robustZ(0.21, flat, Metrics.MIN_FIELD_SPREAD_UT)
+            when {
+                !z.isFinite() -> "z is not finite: $z"
+                z > 3.0 -> "0.21 uT against a flat baseline scored $z MAD"
+                else -> null
+            }
+        }
+
+    fun aRealChangeStillScoresAgainstAFlatBaseline() =
+        check("the floor does not mask a genuinely large change") {
+            val flat = doubleArrayOf(0.0, 0.0, 0.0, 0.0)
+            // 47 uT is a 5 A load at 3 cm. It must still read as far out of range.
+            val z = Stats.robustZ(47.0, flat, Metrics.MIN_FIELD_SPREAD_UT)
+            if (z < 50.0) "a 47 uT change scored only $z MAD" else null
+        }
 
     fun unusableFieldDoesNotProduceALoadDiagnosis() =
         check("an unusable field estimate raises no load fault") {

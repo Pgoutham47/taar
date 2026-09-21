@@ -27,6 +27,7 @@ object GoldenChecks {
         fftFindsAKnownTone(),
         spectrogramShowsTheModulationBand(),
         spectrogramRefusesShortInput(),
+        magnitudeReductionDestroysAPerpendicularAcField(),
     )
 
     // ---- fixtures ----
@@ -166,6 +167,38 @@ object GoldenChecks {
                 s.cells[0].size != s.binCount -> "bin count mismatch"
                 perBin.any { it < 0.0 || it > 1.0 } -> "cells outside 0..1"
                 kotlin.math.abs(peak - target) > 1 -> "peak bin $peak, want about $target"
+                else -> null
+            }
+        }
+
+    /**
+     * Documents the reduction bug found on hardware.
+     *
+     * With the Earth's 45 uT on one axis and a 1 uT alternating field on another,
+     * the magnitude |B| barely moves -- the change is second order. Fitting the
+     * axes separately recovers the full amplitude. This is why MagCapture keeps
+     * x, y and z rather than reducing to magnitude.
+     */
+    fun magnitudeReductionDestroysAPerpendicularAcField() =
+        check("per-axis fit recovers an AC field that magnitude loses") {
+            val n = 300
+            val t = DoubleArray(n) { it * (1.0 / 99.0) }
+            val earthX = 45.0
+            val acY = 1.0
+
+            val magnitude = DoubleArray(n) {
+                val y = acY * sin(2.0 * Math.PI * 50.0 * t[it])
+                kotlin.math.sqrt(earthX * earthX + y * y)
+            }
+            val axisY = DoubleArray(n) { acY * sin(2.0 * Math.PI * 50.0 * t[it]) }
+
+            val fromMagnitude = SineFit.fit(t, magnitude, 50.0).amplitudeUt
+            val fromAxis = SineFit.fit(t, axisY, 50.0).amplitudeUt
+
+            when {
+                fromAxis < 0.95 * acY -> "per-axis fit recovered only $fromAxis of $acY"
+                fromMagnitude > 0.05 * acY ->
+                    "magnitude unexpectedly retained $fromMagnitude -- has the bug been reintroduced?"
                 else -> null
             }
         }

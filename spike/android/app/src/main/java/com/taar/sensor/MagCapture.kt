@@ -27,8 +27,26 @@ class MagCapture(private val sensorManager: SensorManager) {
     data class Samples(
         /** Seconds from the first sample. */
         val tSeconds: DoubleArray,
-        /** Field magnitude in microtesla. */
+        /**
+         * Field magnitude in microtesla. Useful for a noise-floor figure and for
+         * showing the technician something stable, but NOT for detecting the line
+         * component -- see [xUt].
+         */
         val valuesUt: DoubleArray,
+        /**
+         * The three axes, unreduced.
+         *
+         * Magnitude is the wrong reduction for an AC field. The Earth contributes a
+         * static ~45 uT, and a small alternating field perpendicular to it changes
+         * |B| only to second order -- a 1 uT AC field moves the magnitude by about
+         * 0.01 uT. Fitting each axis separately keeps the full component, and the
+         * true AC amplitude is the vector magnitude of the three fitted amplitudes.
+         *
+         * Found on hardware: line confidence read 0.000 with a charger running.
+         */
+        val xUt: DoubleArray,
+        val yUt: DoubleArray,
+        val zUt: DoubleArray,
         /** Rate actually achieved, from the timestamps. */
         val measuredRateHz: Double,
         /** Standard deviation of inter-sample interval, as a fraction of the mean. */
@@ -57,6 +75,9 @@ class MagCapture(private val sensorManager: SensorManager) {
 
         val nanos = ArrayList<Long>(((durationSeconds * safeHz) * 1.5).toInt())
         val values = ArrayList<Double>(nanos.size)
+        val xs = ArrayList<Double>(nanos.size)
+        val ys = ArrayList<Double>(nanos.size)
+        val zs = ArrayList<Double>(nanos.size)
         val done = java.util.concurrent.CountDownLatch(1)
         val durationNanos = (durationSeconds * 1e9).toLong()
 
@@ -81,9 +102,7 @@ class MagCapture(private val sensorManager: SensorManager) {
                 val x = event.values[0].toDouble()
                 val y = event.values[1].toDouble()
                 val z = event.values[2].toDouble()
-                // Magnitude rather than a single axis: the phone's orientation
-                // relative to the conductor is not controlled, and an axis-aligned
-                // reading would depend on how the technician happens to hold it.
+                xs.add(x); ys.add(y); zs.add(z)
                 values.add(sqrt(x * x + y * y + z * z))
             }
 
@@ -110,6 +129,9 @@ class MagCapture(private val sensorManager: SensorManager) {
         return Samples(
             tSeconds = tSeconds,
             valuesUt = DoubleArray(values.size) { values[it] },
+            xUt = DoubleArray(xs.size) { xs[it] },
+            yUt = DoubleArray(ys.size) { ys[it] },
+            zUt = DoubleArray(zs.size) { zs[it] },
             measuredRateHz = if (meanInterval > 0) 1.0 / meanInterval else 0.0,
             jitter = if (meanInterval > 0) sqrt(variance) / meanInterval else 0.0,
             requestedRateHz = safeHz,

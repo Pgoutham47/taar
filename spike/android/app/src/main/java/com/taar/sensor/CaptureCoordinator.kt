@@ -50,8 +50,27 @@ class CaptureCoordinator(
         val m = magJob.await() ?: return@coroutineScope null
         val a = audioJob.await()
 
-        val fit = SineFit.fit(m.tSeconds, m.valuesUt, lineHz)
-        val confidence = LombScargle.power(m.tSeconds, m.valuesUt, lineHz)
+        // Fit each axis, then combine. The AC field is a vector: its amplitude is
+        // the root-sum-square of the per-axis amplitudes, and it is detected on
+        // whichever axis is best aligned with it.
+        val fitX = SineFit.fit(m.tSeconds, m.xUt, lineHz)
+        val fitY = SineFit.fit(m.tSeconds, m.yUt, lineHz)
+        val fitZ = SineFit.fit(m.tSeconds, m.zUt, lineHz)
+        val amplitude = kotlin.math.sqrt(
+            fitX.amplitudeUt * fitX.amplitudeUt +
+                fitY.amplitudeUt * fitY.amplitudeUt +
+                fitZ.amplitudeUt * fitZ.amplitudeUt,
+        )
+        val fit = SineFit.Result(
+            amplitudeUt = amplitude,
+            phaseRad = fitX.phaseRad,
+            conditioning = maxOf(fitX.conditioning, fitY.conditioning, fitZ.conditioning),
+        )
+        val confidence = maxOf(
+            LombScargle.power(m.tSeconds, m.xUt, lineHz),
+            LombScargle.power(m.tSeconds, m.yUt, lineHz),
+            LombScargle.power(m.tSeconds, m.zUt, lineHz),
+        )
         val modulation = a?.let {
             ArcDetector.modulationIndex(it.samples, it.sampleRateHz, 2 * lineHz)
         } ?: 0.0
