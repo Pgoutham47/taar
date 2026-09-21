@@ -41,6 +41,7 @@ object DomainChecks {
         aRealChangeStillScoresAgainstAFlatBaseline(),
         ordinaryArcVariationDoesNotWarn(),
         aRealArcSignatureStillWarns(),
+        liveThresholdSeparatesTheMeasuredPopulations(),
     )
 
     private fun check(name: String, block: () -> String?): Result =
@@ -448,6 +449,30 @@ object DomainChecks {
         if (z < Thresholds.DEFAULT.warningZ)
             "an arc-level reading scored only $z MAD and would not warn" else null
     }
+
+    /**
+     * Holds the live threshold against the readings it was derived from. If either
+     * population moves across it, this fails and the number needs choosing again
+     * rather than nudging.
+     */
+    fun liveThresholdSeparatesTheMeasuredPopulations() =
+        check("live threshold sits between the measured populations") {
+            fun confidence(contrast: Double) = contrast / (contrast + 9.0)
+
+            val noCurrent = listOf(3.0, 2.0, 2.0)
+            val compressorRunning = listOf(9.0, 16.0)
+
+            val highestIdle = noCurrent.maxOf { confidence(it) }
+            val lowestLive = compressorRunning.minOf { confidence(it) }
+
+            when {
+                highestIdle >= Metrics.LIVE_CONFIDENCE ->
+                    "an idle capture (${"%.2f".format(highestIdle)}) reads as live"
+                lowestLive <= Metrics.LIVE_CONFIDENCE ->
+                    "a live capture (${"%.2f".format(lowestLive)}) reads as idle"
+                else -> null
+            }
+        }
 
     fun unusableFieldDoesNotProduceALoadDiagnosis() =
         check("an unusable field estimate raises no load fault") {

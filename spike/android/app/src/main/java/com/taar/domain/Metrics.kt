@@ -34,11 +34,23 @@ data class Metrics(
 
     companion object {
         /**
-         * Normalised Lomb-Scargle power above which a 50 Hz component is considered
-         * present. The spike measured idle captures at 0.0003 and a 0.5 A load at
-         * 0.977, so this sits far from both populations.
+         * Confidence above which a line component is considered present.
+         *
+         * Set from measurement, not from the simulation. Six captures against a
+         * fridge supply cable, phone taped in place and not moved between them:
+         *
+         *     no current      3x, 2x, 2x contrast
+         *     compressor on   9x, 16x
+         *
+         * Midway between those populations is 6x, which maps to 0.40. The previous
+         * 0.30 came from synthetic data and sat at 3.9x -- close enough to the
+         * no-current readings that an idle circuit could be called live, which is
+         * what happened.
+         *
+         * Six captures on one phone against one appliance. Repeat on the loaner
+         * against a larger load before trusting this far.
          */
-        const val LIVE_CONFIDENCE = 0.30
+        const val LIVE_CONFIDENCE = 0.40
 
         /**
          * Floors for the baseline spread. Below these, a baseline is flat because

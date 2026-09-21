@@ -223,7 +223,148 @@ pitch, and it is the difference between "we measured it" and "we assumed it".
 | Timing jitter | 15% | **~0%** | irrelevant at 21 phases |
 | Sensor noise | 0.5 uT RMS | **0.39 uT** | better than assumed |
 | Resolution | 0.15 uT | ________ | |
-| Field at 3 cm | 9.43 uT/A | **NOT CONFIRMED** | still the open question |
+| Field at 3 cm | 9.43 uT/A | **detected, 3x separation** | see §3 note |
+| Min detectable, hand-held | 0.05 A | **0.02 A** (re-run with 0.39) | 2.5x better |
+| Audio source | UNPROCESSED | **refused, fell back to MIC** | check the arc band survives |
+| Ballast false alarm | 4% | ________ | |
+
+*Rows filled from a developer phone on 21 Sept. Repeat on the loaner — the numbers
+above are not the iQOO's.*
+
+**§3 outcome: PASSED, provisionally.** Superseded twice — the first attempt was
+recorded with the readings inverted, the second was too weak to decide. This is the
+third, and the first that separates.
+
+Six captures against a fridge supply cable, phone taped in place and not moved:
+
+| time | state | contrast | confidence |
+|---|---|---|---|
+| 15:07 | no current | 3x | 0.27 |
+| 15:08 | no current | 2x | 0.20 |
+| 15:08 | no current | 2x | 0.15 |
+| 15:08 | switched on | 1x | 0.09 |
+| 15:09 | compressor running | **9x** | 0.50 |
+| 15:09 | compressor running | **16x** | 0.64 |
+
+No current sits at 2–3x. With the compressor drawing, 9x and 16x. A factor of three
+between the populations and no overlap.
+
+**The caveat, stated because it is load-bearing.** The 1x reading is in the ON set.
+It was taken in the same minute as the last idle capture, before the compressor had
+started, and a fridge draws almost nothing until it does. That reading is being set
+aside on an explanation supplied after the fact. The separation holds only if that
+explanation is right.
+
+**What this is worth.** Six captures, one phone, one appliance, one session,
+~1–1.5 A through a twin cable whose conductors largely cancel. It is enough to stop
+treating the premise as unproven and not enough to quote a sensitivity figure.
+
+**Threshold set from this.** `Metrics.LIVE_CONFIDENCE` moved from 0.30 to 0.40 —
+from 3.9x, which the idle readings could reach, to 6x, midway between the two
+populations. A test holds both populations against it.
+
+**Repeat on the loaner** against a larger load on a separated conductor, and take
+five captures per state rather than three.
+
+---
+
+## 4 · Audio path
+
+The arc signature lives at 4–16 kHz. A voice audio path is designed to remove
+exactly that.
+
+```
+AudioSource.UNPROCESSED granted?   ☐ yes   ☐ no, fell back to ________
+Sample rate achieved               ________ Hz
+Logcat line confirming source      ______________________________________
+```
+
+Record 3 s of a 10 kHz tone played from another device and check it survives:
+
+```
+High-band (4-16 kHz) RMS, tone playing    ________
+High-band RMS, silence                    ________
+Ratio                                     ________
+```
+
+**Decision:** if the ratio is small, the audio chain is band-limiting and the arc
+half is in trouble. Note it, and lead the pitch with the magnetometer.
+
+---
+
+## 5 · Arc proxy — triac lamp dimmer
+
+⚠️ **Do not create an arcing connection in mains wiring.** A deliberately loose
+connection under load is a fire and shock hazard. Use a dimmer on an incandescent
+or halogen lamp: it chops the waveform once per half-cycle and produces the same
+100 Hz-locked broadband signature, safely and repeatably.
+
+```
+Dimmer + lamp available?     ☐ yes   ☐ no — source one, or the demo has no fault to show
+
+Modulation index, dimmer OFF      ________     (baseline)
+Modulation index, dimmer 25%      ________
+Modulation index, dimmer 50%      ________
+Modulation index, dimmer 75%      ________
+Threshold from 20 baselines (5% FA)  ________
+
+Separation achieved?   ☐ clean   ☐ marginal   ☐ none
+```
+
+Also record, if the venue has one:
+
+```
+Ballast / transformer hum present?   ☐ yes   ☐ no
+Modulation index of that hum         ________     (spike predicted ~4% false alarm)
+```
+
+**Decision:** the ballast number is the one that matters. A tool that cries arc at a
+transformer is worse than no tool. If it false-alarms, the acoustic half does not
+ship — say so in the pitch and lead with the magnetometer.
+
+---
+
+## 6 · Sustained use
+
+20 captures back to back — the HackTracker checklist wants that many anyway.
+
+```
+Sample rate, first capture     ________ Hz
+Sample rate, 20th capture      ________ Hz
+Phone warm to touch?           ☐ yes  ☐ no
+Battery drop over 20           ________ %
+Any capture failed?            ________ / 20
+```
+
+**Decision:** if the rate degrades when warm, the app must re-measure per capture
+rather than trusting the rate it saw at registration.
+
+---
+
+## 7 · Go / no-go
+
+```
+☐ GO        — §3 passed, path chosen in §1, proceed to build order §5
+☐ GO, REDUCED — magnetometer only; acoustic half not demonstrable
+☐ NO-GO     — §3 failed; switching to ____________________________
+
+Decided at  ________  by  ______________________
+```
+
+---
+
+## 8 · What changed from the spike's assumptions
+
+Fill this in even if everything passed. It is the honest-scoping material for the
+pitch, and it is the difference between "we measured it" and "we assumed it".
+
+| Quantity | Spike assumed | Measured | Consequence |
+|---|---|---|---|
+| Magnetometer rate | 100 Hz nominal | **105.3 Hz** (dev phone, 21 Sep) | 21 distinct phases — safe |
+| Timing jitter | 15% | **~0%** | irrelevant at 21 phases |
+| Sensor noise | 0.5 uT RMS | **0.39 uT** | better than assumed |
+| Resolution | 0.15 uT | ________ | |
+| Field at 3 cm | 9.43 uT/A | **detected, 3x separation** | see §3 note |
 | Min detectable, hand-held | 0.05 A | **0.02 A** (re-run with 0.39) | 2.5x better |
 | Audio source | UNPROCESSED | **refused, fell back to MIC** | check the arc band survives |
 | Ballast false alarm | 4% | ________ | |
