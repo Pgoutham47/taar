@@ -152,7 +152,14 @@ object DomainChecks {
 
     private fun reading(
         field: Double = 10.0, arc: Double = 0.02, live: Double = 0.95, usable: Boolean = true,
-    ) = Reading("c1", 0L, field, live, arc, usable)
+    ) = Reading(
+        circuitId = "c1",
+        epochMillis = 0L,
+        fieldAmplitudeUt = field,
+        lineConfidence = live,
+        arcModulationIndex = arc,
+        fieldEstimateUsable = usable,
+    )
 
     fun metricsNeedABaseline() = check("metrics refuse without a sufficient baseline") {
         val none = Circuit("c1", "Lights")

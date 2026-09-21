@@ -57,8 +57,10 @@ data class Reading(
     val epochMillis: Long,
     /** Peak amplitude of the 50 Hz field component, microtesla. */
     val fieldAmplitudeUt: Double,
-    /** Normalised Lomb-Scargle power at the line frequency, in [0, 1]. */
+    /** Contrast-derived confidence a line component is present, in [0, 1]. */
     val lineConfidence: Double,
+    /** Raw contrast ratio at the line frequency. ~1 is nothing, 100 is unmistakable. */
+    val lineContrast: Double = 0.0,
     /** Envelope power at twice line frequency, as a fraction. */
     val arcModulationIndex: Double,
     /** False when the sine fit was ill-conditioned; the amplitude is not usable. */

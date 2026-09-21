@@ -28,6 +28,8 @@ object GoldenChecks {
         spectrogramShowsTheModulationBand(),
         spectrogramRefusesShortInput(),
         magnitudeReductionDestroysAPerpendicularAcField(),
+        contrastSurvivesDriftThatKillsPlainPower(),
+        contrastIsNearOneWithNoSignal(),
     )
 
     // ---- fixtures ----
@@ -199,6 +201,50 @@ object GoldenChecks {
                 fromAxis < 0.95 * acY -> "per-axis fit recovered only $fromAxis of $acY"
                 fromMagnitude > 0.05 * acY ->
                     "magnitude unexpectedly retained $fromMagnitude -- has the bug been reintroduced?"
+                else -> null
+            }
+        }
+
+    private fun driftingCapture(withSignal: Boolean, driftUt: Double): Pair<DoubleArray, DoubleArray> {
+        val n = 316
+        val fs = 105.3
+        val rng = java.util.Random(12345)
+        val t = DoubleArray(n) { it / fs }
+        val y = DoubleArray(n) {
+            val signal = if (withSignal) 0.45 * sin(2.0 * Math.PI * 50.0 * t[it]) else 0.0
+            val drift = driftUt * (t[it] / t[n - 1] - 0.5)
+            45.0 + signal + rng.nextGaussian() * 0.40 + drift
+        }
+        return t to y
+    }
+
+    /**
+     * The failure this replaced, from a real capture: a genuine 0.45 uT line
+     * component reported a confidence of 0.000 because hand drift dominated the
+     * variance that plain Lomb-Scargle power normalises by.
+     */
+    fun contrastSurvivesDriftThatKillsPlainPower() =
+        check("contrast still sees 50 Hz through drift that zeroes plain power") {
+            val (t, y) = driftingCapture(withSignal = true, driftUt = 10.0)
+            val plain = LombScargle.power(t, y, 50.0)
+            val contrast = LombScargle.contrast(t, y, 50.0)
+            when {
+                plain > 0.05 -> "plain power was $plain; the drift case is not being reproduced"
+                contrast < 10.0 -> "contrast only $contrast through drift"
+                LombScargle.confidenceFromContrast(contrast) < 0.5 ->
+                    "confidence ${LombScargle.confidenceFromContrast(contrast)} too low"
+                else -> null
+            }
+        }
+
+    fun contrastIsNearOneWithNoSignal() =
+        check("contrast stays near 1 when there is no line component") {
+            val (t, y) = driftingCapture(withSignal = false, driftUt = 10.0)
+            val contrast = LombScargle.contrast(t, y, 50.0)
+            when {
+                contrast > 5.0 -> "contrast $contrast with no signal present"
+                LombScargle.confidenceFromContrast(contrast) > 0.4 ->
+                    "confidence too high with no signal"
                 else -> null
             }
         }

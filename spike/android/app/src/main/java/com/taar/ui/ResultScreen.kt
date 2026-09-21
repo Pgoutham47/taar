@@ -62,7 +62,10 @@ fun ResultScreen(
 
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Metric("Line confidence", "%.3f".format(reading.lineConfidence))
+                Metric(
+                    "Mains detected",
+                    "%.0fx contrast · %.2f".format(reading.lineContrast, reading.lineConfidence),
+                )
                 Metric("Field amplitude", "%.2f uT".format(reading.fieldAmplitudeUt))
                 Metric(
                     "Load",

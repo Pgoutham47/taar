@@ -206,6 +206,7 @@ class TaarViewModel(
                 epochMillis = System.currentTimeMillis(),
                 fieldAmplitudeUt = result.fieldAmplitudeUt,
                 lineConfidence = result.lineConfidence,
+                lineContrast = result.lineContrast,
                 arcModulationIndex = result.arcModulationIndex,
                 fieldEstimateUsable = result.fieldEstimateUsable,
             )

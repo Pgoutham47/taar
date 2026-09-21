@@ -27,7 +27,10 @@ class CaptureCoordinator(
         /** Peak amplitude of the 50 Hz field component, microtesla. */
         val fieldAmplitudeUt: Double,
         /** Normalised Lomb-Scargle power at 50 Hz, in [0, 1]. */
+        /** Contrast-derived confidence a line component is present, in [0, 1]. */
         val lineConfidence: Double,
+        /** Raw contrast ratio at the line frequency. ~1 is nothing, 100 is unmistakable. */
+        val lineContrast: Double,
         /** Envelope power at 100 Hz as a fraction of the envelope band. */
         val arcModulationIndex: Double,
         val magMeasuredRateHz: Double,
@@ -53,9 +56,14 @@ class CaptureCoordinator(
         // Fit each axis, then combine. The AC field is a vector: its amplitude is
         // the root-sum-square of the per-axis amplitudes, and it is detected on
         // whichever axis is best aligned with it.
-        val fitX = SineFit.fit(m.tSeconds, m.xUt, lineHz)
-        val fitY = SineFit.fit(m.tSeconds, m.yUt, lineHz)
-        val fitZ = SineFit.fit(m.tSeconds, m.zUt, lineHz)
+        // Detrended: a drifting baseline biases a least-squares sinusoid fit.
+        val dx = LombScargle.detrend(m.tSeconds, m.xUt)
+        val dy = LombScargle.detrend(m.tSeconds, m.yUt)
+        val dz = LombScargle.detrend(m.tSeconds, m.zUt)
+
+        val fitX = SineFit.fit(m.tSeconds, dx, lineHz)
+        val fitY = SineFit.fit(m.tSeconds, dy, lineHz)
+        val fitZ = SineFit.fit(m.tSeconds, dz, lineHz)
         val amplitude = kotlin.math.sqrt(
             fitX.amplitudeUt * fitX.amplitudeUt +
                 fitY.amplitudeUt * fitY.amplitudeUt +
@@ -66,11 +74,13 @@ class CaptureCoordinator(
             phaseRad = fitX.phaseRad,
             conditioning = maxOf(fitX.conditioning, fitY.conditioning, fitZ.conditioning),
         )
-        val confidence = maxOf(
-            LombScargle.power(m.tSeconds, m.xUt, lineHz),
-            LombScargle.power(m.tSeconds, m.yUt, lineHz),
-            LombScargle.power(m.tSeconds, m.zUt, lineHz),
+        // Contrast against neighbouring frequencies, not against total variance.
+        val contrast = maxOf(
+            LombScargle.contrast(m.tSeconds, m.xUt, lineHz),
+            LombScargle.contrast(m.tSeconds, m.yUt, lineHz),
+            LombScargle.contrast(m.tSeconds, m.zUt, lineHz),
         )
+        val confidence = LombScargle.confidenceFromContrast(contrast)
         val modulation = a?.let {
             ArcDetector.modulationIndex(it.samples, it.sampleRateHz, 2 * lineHz)
         } ?: 0.0
@@ -80,6 +90,7 @@ class CaptureCoordinator(
             lineHz = lineHz,
             fieldAmplitudeUt = fit.amplitudeUt,
             lineConfidence = confidence,
+            lineContrast = contrast,
             arcModulationIndex = modulation,
             magMeasuredRateHz = m.measuredRateHz,
             magJitter = m.jitter,

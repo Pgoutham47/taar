@@ -34,7 +34,7 @@ class MemoryFileSystem : FileSystem {
 class Store(private val fs: FileSystem) {
 
     companion object {
-        const val VERSION = "taar/1"
+        const val VERSION = "taar/2"   // v2 adds lineContrast to each reading
         private const val SEP = "\t"
         private fun esc(s: String) = s.replace("\\", "\\\\").replace("\t", "\\t")
             .replace("\n", "\\n")
@@ -147,6 +147,7 @@ class Store(private val fs: FileSystem) {
             esc(r.circuitId), r.epochMillis.toString(), r.fieldAmplitudeUt.toString(),
             r.lineConfidence.toString(), r.arcModulationIndex.toString(),
             r.fieldEstimateUsable.toString(), label?.name ?: "",
+            r.lineContrast.toString(),
         ).joinToString(SEP))
         fs.write(readingsPath(installationId), sb.toString())
     }
@@ -169,6 +170,7 @@ class Store(private val fs: FileSystem) {
                     lineConfidence = f[3].toDouble(),
                     arcModulationIndex = f[4].toDouble(),
                     fieldEstimateUsable = f[5].toBoolean(),
+                    lineContrast = f.getOrNull(7)?.toDoubleOrNull() ?: 0.0,
                 ),
                 label = f[6].takeIf { it.isNotEmpty() }?.let { runCatching { Status.valueOf(it) }.getOrNull() },
             )

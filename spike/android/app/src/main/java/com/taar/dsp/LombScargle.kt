@@ -18,6 +18,77 @@ import kotlin.math.sin
 object LombScargle {
 
     /**
+     * Removes a linear trend.
+     *
+     * A hand-held capture drifts: the phone settles, the wrist moves, the sensor
+     * warms. That drift is large compared with the line component and carries no
+     * information about current.
+     */
+    fun detrend(tSeconds: DoubleArray, values: DoubleArray): DoubleArray {
+        val n = values.size
+        if (n < 3) return values.copyOf()
+        val meanT = tSeconds.average()
+        val meanY = values.average()
+        var sxy = 0.0
+        var sxx = 0.0
+        for (i in 0 until n) {
+            val dt = tSeconds[i] - meanT
+            sxy += dt * (values[i] - meanY)
+            sxx += dt * dt
+        }
+        val slope = if (sxx > 0) sxy / sxx else 0.0
+        return DoubleArray(n) { values[it] - (meanY + slope * (tSeconds[it] - meanT)) }
+    }
+
+    /**
+     * Power at [freqHz] relative to the median power of neighbouring frequencies.
+     *
+     * [power] normalises by the series' total variance, which is the right thing on
+     * a bench and the wrong thing in a hand. Drift and low-frequency movement
+     * dominate that variance and drive the statistic to zero even when a clean line
+     * component is present -- measured on hardware, where a real 0.45 uT signal
+     * reported a confidence of 0.000.
+     *
+     * Comparing 50 Hz against 30-48 and 52-70 Hz asks a better question: is there
+     * more here than in the neighbourhood? Drift affects the whole neighbourhood
+     * equally and divides out.
+     *
+     * @return a ratio. Around 1 means nothing; a real mains signal runs to 100x.
+     */
+    fun contrast(tSeconds: DoubleArray, values: DoubleArray, freqHz: Double = LINE_HZ): Double {
+        if (values.size < 32) return 0.0
+        val y = detrend(tSeconds, values)
+
+        val at = power(tSeconds, y, freqHz)
+        if (at <= 0.0) return 0.0
+
+        val neighbours = ArrayList<Double>(36)
+        var f = freqHz - 20.0
+        while (f <= freqHz + 20.0) {
+            if (kotlin.math.abs(f - freqHz) >= 2.0 && f >= 5.0) {
+                neighbours.add(power(tSeconds, y, f))
+            }
+            f += 1.0
+        }
+        if (neighbours.isEmpty()) return 0.0
+
+        neighbours.sort()
+        val median = neighbours[neighbours.size / 2]
+        return if (median > 1e-12) at / median else 0.0
+    }
+
+    /**
+     * Contrast expressed on a 0..1 scale for thresholds and display.
+     *
+     * The mapping is `c / (c + 9)`, so no signal (~1x) reads about 0.10 and a clear
+     * one (~100x) reads about 0.92.
+     */
+    fun confidenceFromContrast(contrast: Double): Double =
+        if (contrast <= 0.0) 0.0 else contrast / (contrast + 9.0)
+
+    private const val LINE_HZ = 50.0
+
+    /**
      * @return normalised power in [0, 1]; near 1 means the series is almost
      *   entirely a sinusoid at [freqHz].
      */
