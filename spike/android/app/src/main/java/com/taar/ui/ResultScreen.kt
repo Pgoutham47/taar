@@ -14,9 +14,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.taar.domain.CurrentBasis
 import com.taar.domain.RankedFault
@@ -174,11 +176,26 @@ private fun FaultCard(r: RankedFault) {
 
 @Composable
 private fun Metric(label: String, value: String) {
-    Row(modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(label, style = MaterialTheme.typography.bodySmall)
-        Text(value, style = MaterialTheme.typography.bodySmall,
-            fontFamily = FontFamily.Monospace)
+    // The label is given its own share of the row and the value is right-aligned
+    // within the rest. SpaceBetween alone let the two run together at larger font
+    // scales, which produced "Thresholdswarn 4.0" on a real device.
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            value,
+            style = MaterialTheme.typography.bodySmall,
+            fontFamily = FontFamily.Monospace,
+            textAlign = TextAlign.End,
+            modifier = Modifier.weight(1.4f),
+        )
     }
 }
 

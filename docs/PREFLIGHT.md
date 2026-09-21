@@ -223,13 +223,20 @@ pitch, and it is the difference between "we measured it" and "we assumed it".
 | Timing jitter | 15% | **~0%** | irrelevant at 21 phases |
 | Sensor noise | 0.5 uT RMS | **0.39 uT** | better than assumed |
 | Resolution | 0.15 uT | ________ | |
-| Field at 3 cm | 9.43 uT/A | ________ | **the open question** |
+| Field at 3 cm | 9.43 uT/A | **confirmed present** (21 Sep) | see note |
 | Min detectable, hand-held | 0.05 A | **0.02 A** (re-run with 0.39) | 2.5x better |
 | Audio source | UNPROCESSED | **refused, fell back to MIC** | check the arc band survives |
 | Ballast false alarm | 4% | ________ | |
 
 *Rows filled from a developer phone on 21 Sept. Repeat on the loaner — the numbers
 above are not the iQOO's.*
+
+**§3 outcome: PASS, at the floor.** A laptop charger (~0.3 A through a twin cable,
+coiled) gave **6x contrast with current flowing against 1x without**, field
+amplitude 0.08 uT. The detector separates in the right direction on real hardware,
+so the premise holds. The margin is small because the source is about the weakest
+available: twin-cable cancellation plus a third of an amp. Repeat against a real
+load on a separated conductor before trusting the sensitivity figure.
 
 ```
 Anything the spike got wrong:
