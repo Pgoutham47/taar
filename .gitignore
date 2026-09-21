@@ -1,0 +1,18 @@
+# Python spike
+.venv/
+__pycache__/
+*.pyc
+
+# Gradle / Android
+.gradle/
+build/
+spike/android/build/
+spike/android/app/build/
+spike/android/local.properties
+spike/android/.kotlin/
+*.apk
+*.jar
+!spike/android/gradle/wrapper/gradle-wrapper.jar
+
+# macOS
+.DS_Store

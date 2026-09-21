@@ -1,0 +1,4 @@
+case,current_a,n_samples,lombscargle_power_50hz,amplitude_ut
+loaded_2A,2.0,297,0.998460244,18.801123548
+loaded_0p5A,0.5,297,0.976749004,4.701762616
+idle,0.0,297,0.000311134,0.014181252
