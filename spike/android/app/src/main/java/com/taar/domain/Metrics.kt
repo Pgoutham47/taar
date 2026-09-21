@@ -41,13 +41,21 @@ data class Metrics(
         const val LIVE_CONFIDENCE = 0.30
 
         /**
-         * Floors for the baseline spread, at roughly a magnetometer's reported
-         * resolution and the arc statistic's own quantisation. Below these, a
-         * baseline is flat because the sensor cannot see finer, not because the
-         * circuit is exceptionally steady.
+         * Floors for the baseline spread. Below these, a baseline is flat because
+         * the statistic cannot resolve finer, not because the circuit is
+         * exceptionally steady.
+         *
+         * [MIN_ARC_SPREAD] was originally 0.002, chosen by guesswork. Nine captures
+         * on real hardware put the modulation index between 0.0062 and 0.0525 with
+         * a MAD of 0.0104 -- five times that floor. Dividing ordinary variation by
+         * a floor five times too small reported a fridge at 20 MAD above baseline
+         * and raised an arcing warning on it.
+         *
+         * Set from the measured spread. Still provisional: nine captures on one
+         * phone, none of them next to a real arc.
          */
         const val MIN_FIELD_SPREAD_UT = 0.15
-        const val MIN_ARC_SPREAD = 0.002
+        const val MIN_ARC_SPREAD = 0.010
 
         fun derive(reading: Reading, circuit: Circuit): Metrics? {
             val baseline = circuit.baseline ?: return null

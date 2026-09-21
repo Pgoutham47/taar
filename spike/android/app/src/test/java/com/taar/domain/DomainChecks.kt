@@ -39,6 +39,8 @@ object DomainChecks {
         classifierWithNoTrainingReturnsNothing(),
         flatBaselineDoesNotManufactureHugeZScores(),
         aRealChangeStillScoresAgainstAFlatBaseline(),
+        ordinaryArcVariationDoesNotWarn(),
+        aRealArcSignatureStillWarns(),
     )
 
     private fun check(name: String, block: () -> String?): Result =
@@ -420,6 +422,32 @@ object DomainChecks {
             val z = Stats.robustZ(47.0, flat, Metrics.MIN_FIELD_SPREAD_UT)
             if (z < 50.0) "a 47 uT change scored only $z MAD" else null
         }
+
+    /**
+     * Nine captures on hardware put the arc modulation index between 0.0062 and
+     * 0.0525. None was next to an arc; the spread is what the statistic does on an
+     * ordinary appliance. It must not warn.
+     */
+    fun ordinaryArcVariationDoesNotWarn() = check("ordinary arc variation does not warn") {
+        val observed = doubleArrayOf(
+            0.0229, 0.0234, 0.0137, 0.0164, 0.0264, 0.0062, 0.0304, 0.0245,
+        )
+        val worst = 0.0525
+        val z = Stats.robustZ(worst, observed, Metrics.MIN_ARC_SPREAD)
+        if (z >= Thresholds.DEFAULT.warningZ)
+            "the highest ordinary reading scored $z MAD, at or above the warn threshold"
+        else null
+    }
+
+    fun aRealArcSignatureStillWarns() = check("a real arc signature still warns") {
+        val observed = doubleArrayOf(
+            0.0229, 0.0234, 0.0137, 0.0164, 0.0264, 0.0062, 0.0304, 0.0245,
+        )
+        // The reference measured a gated carrier -- the arc stand-in -- above 0.10.
+        val z = Stats.robustZ(0.13, observed, Metrics.MIN_ARC_SPREAD)
+        if (z < Thresholds.DEFAULT.warningZ)
+            "an arc-level reading scored only $z MAD and would not warn" else null
+    }
 
     fun unusableFieldDoesNotProduceALoadDiagnosis() =
         check("an unusable field estimate raises no load fault") {
