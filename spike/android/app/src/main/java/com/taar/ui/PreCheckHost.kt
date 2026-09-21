@@ -41,8 +41,13 @@ fun PreCheckHost(
     var run by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(run) {
+        state = state.copy(running = true, failed = false)
         val samples = withContext(Dispatchers.IO) { mag.capture(durationSeconds = 3.0) }
-        if (samples != null) {
+        if (samples == null) {
+            // Distinguish "capture failed" from "measured zero" — they look
+            // identical on screen otherwise, and mean very different things.
+            state = state.copy(running = false, failed = true)
+        } else {
             // Noise floor from the centred readings, which is what every threshold
             // is scaled against.
             val centred = DoubleArray(samples.valuesUt.size) {
@@ -53,6 +58,8 @@ fun PreCheckHost(
                 magJitter = samples.jitter,
                 magRequestedRateHz = samples.requestedRateHz,
                 noiseFloorUt = Stats.stdDev(centred),
+                running = false,
+                failed = false,
             )
         }
     }

@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
@@ -33,6 +34,9 @@ data class PreCheckState(
     val unprocessedGranted: Boolean,
     val noiseFloorUt: Double,
     val hasBaseline: Boolean,
+    val running: Boolean = false,
+    /** The magnetometer capture returned nothing at all. */
+    val failed: Boolean = false,
 )
 
 @Composable
@@ -42,7 +46,8 @@ fun PreCheckScreen(state: PreCheckState, onRun: () -> Unit, onContinue: () -> Un
     val locked = state.magMeasuredRateHz > 0 && phases < 3
 
     Column(
-        modifier = Modifier.fillMaxWidth().padding(16.dp),
+        // Without this the title sits under the status bar clock.
+        modifier = Modifier.fillMaxWidth().safeDrawingPadding().padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text("Pre-check", style = MaterialTheme.typography.headlineSmall)
@@ -54,6 +59,19 @@ fun PreCheckScreen(state: PreCheckState, onRun: () -> Unit, onContinue: () -> Un
 
         CheckRow("Magnetometer", state.magAvailable,
             if (state.magAvailable) "present" else "absent — this device cannot run Taar")
+
+        if (state.running) {
+            Text("Capturing 3 s…", style = MaterialTheme.typography.bodySmall)
+        }
+        if (state.failed) {
+            Text(
+                "Capture returned no samples. The sensor is present but delivered " +
+                    "nothing in 3 s — re-run, and if it persists the device is not " +
+                    "usable for Taar.",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color(0xFFFF6B6B),
+            )
+        }
 
         CheckRow(
             "Sample rate",

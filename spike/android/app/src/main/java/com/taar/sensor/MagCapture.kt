@@ -39,6 +39,11 @@ class MagCapture(private val sensorManager: SensorManager) {
 
     private val sensor: Sensor? = sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD)
 
+    private companion object {
+        /** Below this a rate and jitter estimate is meaningless. */
+        const val MIN_SAMPLES = 16
+    }
+
     val isAvailable: Boolean get() = sensor != null
 
     /**
@@ -53,11 +58,22 @@ class MagCapture(private val sensorManager: SensorManager) {
         val nanos = ArrayList<Long>(((durationSeconds * safeHz) * 1.5).toInt())
         val values = ArrayList<Double>(nanos.size)
         val done = java.util.concurrent.CountDownLatch(1)
-        val deadline = System.nanoTime() + (durationSeconds * 1e9).toLong()
+        val durationNanos = (durationSeconds * 1e9).toLong()
+
+        // The window is measured against the first event's own timestamp, never
+        // against a wall clock.
+        //
+        // SensorEvent.timestamp is CLOCK_BOOTTIME (it includes deep sleep), while
+        // System.nanoTime() is CLOCK_MONOTONIC (it does not). On a phone that has
+        // been asleep the two differ by hours, so comparing them made the first
+        // event look already past the deadline and every capture returned nothing.
+        // Found on hardware; the unit tests could not have caught it.
+        var originNanos = Long.MIN_VALUE
 
         val listener = object : SensorEventListener {
             override fun onSensorChanged(event: SensorEvent) {
-                if (event.timestamp > deadline) {
+                if (originNanos == Long.MIN_VALUE) originNanos = event.timestamp
+                if (event.timestamp - originNanos > durationNanos) {
                     done.countDown()
                     return
                 }
@@ -82,7 +98,8 @@ class MagCapture(private val sensorManager: SensorManager) {
             sensorManager.unregisterListener(listener)
         }
 
-        if (nanos.size < 16) return null
+        // Too few samples is a failure, not a quiet zero. The caller surfaces it.
+        if (nanos.size < MIN_SAMPLES) return null
 
         val t0 = nanos.first()
         val tSeconds = DoubleArray(nanos.size) { (nanos[it] - t0) / 1e9 }
