@@ -525,32 +525,56 @@
 
 <!-- ══ 09 · the demo ══════════════════════════════════════════ -->
 <section class="s night glow pad" style="justify-content:space-between">
-  <span class="eyebrow" style="position:relative">Ninety seconds, on the iQOO, in airplane mode</span>
 
-  <div style="position:relative">
-    <h2 style="max-width:930px; font-size:55px; line-height:1.08">
-      A phone finds electricity through insulation, and touches nothing to do it.
-    </h2>
-    <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:42px; margin-top:40px">
-      <div style="border-top:2px solid var(--cyan); padding-top:14px">
-        <p class="m" style="color:var(--cyan-hi); font-size:13px; margin-bottom:8px">01</p>
-        <p><em>Off.</em> Phone taped to the cable. Measure. No mains detected.</p>
+  <div style="display:flex; justify-content:space-between; align-items:center; position:relative">
+    <span class="eyebrow">The demo · ninety seconds, on the iQOO</span>
+    <span style="display:inline-flex; align-items:center; gap:9px;
+                 border:1px solid rgba(53,221,138,.45); border-radius:3px; padding:7px 13px">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="#35dd8a" aria-hidden="true">
+        <path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2.5 1.5V22L12 21l3.5 1.5V20.5L13 19v-5.5z"/>
+      </svg>
+      <span style="font:700 11px/1 var(--sans); letter-spacing:.2em; color:var(--green)">AIRPLANE MODE ON</span>
+    </span>
+  </div>
+
+  <h2 style="max-width:900px; font-size:50px; line-height:1.07; position:relative">
+    Nothing in the room moves but a switch.
+  </h2>
+
+  <!-- each number sits directly above the capture it came from -->
+  <div style="display:grid; grid-template-columns:1fr 300px 1fr; gap:28px;
+              align-items:end; position:relative">
+
+    <div>
+      <div style="font:600 92px/1 var(--sans); letter-spacing:-.05em; color:var(--cyan)">3×</div>
+      <div class="eyebrow mute" style="margin:8px 0 14px">Appliance off · nothing moved</div>
+      <div class="plate cool" style="padding:10px">
+        <figure><img src="assets/reading-off.jpg" alt="Mains detected 3x contrast, field amplitude 0.05 uT." /></figure>
       </div>
-      <div style="border-top:2px solid var(--amber); padding-top:14px">
-        <p class="m" style="color:var(--amber-hi); font-size:13px; margin-bottom:8px">02</p>
-        <p><em>On.</em> Nothing in the room moves but a switch. Measure again.</p>
-      </div>
-      <div style="border-top:2px solid var(--green); padding-top:14px">
-        <p class="m" style="color:var(--green); font-size:13px; margin-bottom:8px">03</p>
-        <p><em>The jump.</em> The contrast number is the demo. Everything else is set-up.</p>
+    </div>
+
+    <div style="text-align:center; padding-bottom:58px">
+      <svg viewBox="0 0 300 40" style="width:100%" aria-hidden="true">
+        <line x1="6" y1="20" x2="288" y2="20" stroke="#4b6aa0" stroke-width="1.5"/>
+        <path d="M294 20 l-14 -6.5 v13 z" fill="#f59e0b"/>
+      </svg>
+      <div style="font:700 13px/1 var(--sans); letter-spacing:.16em; color:var(--amber-hi); margin-top:10px">ONE SWITCH</div>
+      <p style="font-size:13px; margin-top:8px">phone taped down,<br />never touched</p>
+    </div>
+
+    <div>
+      <div style="font:600 114px/1 var(--sans); letter-spacing:-.055em; color:var(--amber)">16×</div>
+      <div class="eyebrow" style="margin:8px 0 14px; color:var(--amber-hi)">Compressor running · same position</div>
+      <div class="plate warm" style="padding:10px">
+        <figure><img src="assets/reading-on.jpg" alt="Mains detected 16x contrast, field amplitude 0.14 uT." /></figure>
       </div>
     </div>
   </div>
 
   <div style="display:grid; grid-template-columns:1fr auto; gap:40px; align-items:end; position:relative">
-    <p class="lede" style="max-width:540px">Yesterday it was a claim.<br />
-      Today there are <span style="color:var(--amber-hi)">six captures</span> behind it.</p>
-    <p class="m" style="text-align:right; font-size:13px">
+    <p class="lede" style="max-width:560px; font-size:23px">Yesterday it was a claim. Today there
+      are <span style="color:var(--amber-hi)">six captures</span> behind it.</p>
+    <p class="m" style="text-align:right; font-size:12.5px; color:var(--on-night-2)">
       Taar · Against Default<br />Goutham Pakala · Geetha Tigulla
     </p>
   </div>
