@@ -2,6 +2,7 @@ package com.taar.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.taar.domain.AmpCalibration
 import com.taar.domain.Baseline
 import com.taar.domain.Classifier
 import com.taar.domain.CentroidClassifier
@@ -35,21 +36,54 @@ class TaarViewModel(
     private val store: Store,
 ) : ViewModel() {
 
+    /** What a running capture is for, so the screen can say so. */
+    enum class CaptureKind { REFERENCE, MEASURE, CALIBRATE_OFF, CALIBRATE_ON }
+
+    /** A capture in progress: capture [step] of [total]. */
+    data class CaptureProgress(val kind: CaptureKind, val step: Int, val total: Int)
+
+    /** The last phone check, persisted so it need not be repeated every launch. */
+    data class PhoneCheck(val passed: Boolean, val rateHz: Double, val atMillis: Long)
+
+    data class Calibration(
+        val watts: String = "",
+        val offFields: List<Double> = emptyList(),
+        val offConfidences: List<Double> = emptyList(),
+        val onFields: List<Double> = emptyList(),
+        val onConfidences: List<Double> = emptyList(),
+        val result: AmpCalibration.Result? = null,
+        val saved: Boolean = false,
+    ) {
+        val offDone: Boolean get() = offFields.isNotEmpty()
+        val onDone: Boolean get() = onFields.isNotEmpty()
+    }
+
     data class UiState(
         val installation: Installation? = null,
         val selectedCircuitId: String? = null,
-        val busy: Boolean = false,
+        val capture: CaptureProgress? = null,
+        /** Null until a measurement completes; cleared when a new one starts. */
         val lastReading: Reading? = null,
         val lastStatus: Status = Status.UNKNOWN,
         val lastFaults: List<RankedFault> = emptyList(),
+        val lastImpliedCurrentA: Double? = null,
+        /** The label the technician confirmed on the current reading, if any. */
+        val lastLabel: Status? = null,
         val thresholds: Thresholds = Thresholds.DEFAULT,
-        val baselineProgress: Int = 0,
-        val message: String? = null,
+        /** One-off problem to show on the current screen. */
+        val error: String? = null,
+        /** Set when a reference has just been recorded, for the confirmation panel. */
+        val referenceJustRecorded: Boolean = false,
+        val supplyIsolated: Boolean = false,
+        val phoneCheck: PhoneCheck? = null,
+        val calibration: Calibration = Calibration(),
         val installations: List<Installation> = emptyList(),
         val history: List<Store.LabelledReading> = emptyList(),
         val spectrogram: com.taar.dsp.Spectrogram.Result? = null,
         val prediction: Prediction? = null,
-    )
+    ) {
+        val busy: Boolean get() = capture != null
+    }
 
     private val _state = MutableStateFlow(UiState())
     val state: StateFlow<UiState> = _state.asStateFlow()
@@ -59,18 +93,73 @@ class TaarViewModel(
             s.installation?.circuits?.firstOrNull { it.id == s.selectedCircuitId }
         }
 
-    /**
-     * Creates a starter board on first launch and selects its first circuit.
-     *
-     * Without this the app opens with nothing selected and every action is a no-op,
-     * which on a demo floor reads as a broken build rather than an empty one.
-     */
     private val classifier: Classifier = CentroidClassifier()
 
+    private fun update(block: (UiState) -> UiState) {
+        _state.value = block(_state.value)
+    }
+
+    // ---- start-up ----
+
+    /**
+     * Reopens the board and circuit that were open last time, or creates a starter
+     * board on first launch.
+     *
+     * Without a starter the app opens with nothing selected and every action is a
+     * no-op, which on a demo floor reads as a broken build rather than an empty one.
+     */
+    fun bootstrap() {
+        if (store.listInstallationIds().isEmpty()) {
+            store.saveInstallation(
+                Installation(
+                    id = "board-1",
+                    name = "Board 1",
+                    circuits = listOf(
+                        Circuit("c1", "Circuit 1", breakerRatingA = 6.0),
+                        Circuit("c2", "Circuit 2", breakerRatingA = 16.0),
+                        Circuit("c3", "Circuit 3", breakerRatingA = 16.0),
+                    ),
+                ),
+            )
+        }
+        refreshInstallations()
+
+        val boardId = store.loadSetting(KEY_BOARD)
+            ?.takeIf { id -> _state.value.installations.any { it.id == id } }
+            ?: _state.value.installations.first().id
+        val installation = store.loadInstallation(boardId)
+        val circuitId = store.loadSetting(KEY_CIRCUIT)
+            ?.takeIf { id -> installation?.circuits?.any { it.id == id } == true }
+            ?: installation?.circuits?.firstOrNull()?.id
+
+        update {
+            it.copy(
+                installation = installation,
+                selectedCircuitId = circuitId,
+                phoneCheck = loadPhoneCheck(),
+            )
+        }
+        refreshThresholds()
+    }
+
+    fun recordPhoneCheck(passed: Boolean, rateHz: Double) {
+        val check = PhoneCheck(passed, rateHz, System.currentTimeMillis())
+        store.saveSetting(KEY_PHONE_CHECK, "${check.passed} ${check.rateHz} ${check.atMillis}")
+        update { it.copy(phoneCheck = check) }
+    }
+
+    private fun loadPhoneCheck(): PhoneCheck? =
+        store.loadSetting(KEY_PHONE_CHECK)?.split(" ")?.takeIf { it.size == 3 }?.let {
+            runCatching { PhoneCheck(it[0].toBoolean(), it[1].toDouble(), it[2].toLong()) }
+                .getOrNull()
+        }
+
+    // ---- boards and circuits ----
+
     fun refreshInstallations() {
-        _state.value = _state.value.copy(
-            installations = store.listInstallationIds().mapNotNull { store.loadInstallation(it) },
-        )
+        update {
+            it.copy(installations = store.listInstallationIds().mapNotNull { id -> store.loadInstallation(id) })
+        }
     }
 
     fun createInstallation(name: String) {
@@ -79,45 +168,81 @@ class TaarViewModel(
         refreshInstallations()
     }
 
+    /** Saves a board. Every edit on the circuits screen goes through here immediately. */
     fun saveInstallation(updated: Installation) {
         store.saveInstallation(updated)
-        _state.value = _state.value.copy(installation = updated, message = "Saved.")
+        update {
+            it.copy(installation = if (it.installation?.id == updated.id) updated else it.installation)
+        }
         refreshInstallations()
+    }
+
+    fun addCircuit(installationId: String, label: String, breakerRatingA: Double?) {
+        val inst = store.loadInstallation(installationId) ?: return
+        saveInstallation(
+            inst.copy(
+                circuits = inst.circuits + Circuit(
+                    id = "c${System.currentTimeMillis()}",
+                    label = label,
+                    breakerRatingA = breakerRatingA,
+                ),
+            ),
+        )
+    }
+
+    fun updateCircuit(installationId: String, circuit: Circuit) {
+        val inst = store.loadInstallation(installationId) ?: return
+        saveInstallation(inst.copy(circuits = inst.circuits.map { if (it.id == circuit.id) circuit else it }))
+    }
+
+    fun removeCircuit(installationId: String, circuitId: String) {
+        val inst = store.loadInstallation(installationId) ?: return
+        saveInstallation(inst.copy(circuits = inst.circuits.filterNot { it.id == circuitId }))
+        if (_state.value.installation?.id == installationId && _state.value.selectedCircuitId == circuitId) {
+            update { it.copy(selectedCircuitId = null) }
+        }
+    }
+
+    fun renameInstallation(installationId: String, name: String) {
+        val inst = store.loadInstallation(installationId) ?: return
+        saveInstallation(inst.copy(name = name))
+    }
+
+    fun setBenchRig(installationId: String, bench: Boolean) {
+        val inst = store.loadInstallation(installationId) ?: return
+        saveInstallation(inst.copy(isBenchRig = bench))
+    }
+
+    /** Opens a board and selects one of its circuits, and remembers both. */
+    fun selectCircuit(installationId: String, circuitId: String) {
+        val inst = store.loadInstallation(installationId) ?: return
+        store.saveSetting(KEY_BOARD, installationId)
+        store.saveSetting(KEY_CIRCUIT, circuitId)
+        update {
+            it.copy(
+                installation = inst,
+                selectedCircuitId = circuitId,
+                lastReading = null,
+                lastFaults = emptyList(),
+                lastLabel = null,
+                calibration = Calibration(),
+                referenceJustRecorded = false,
+                error = null,
+            )
+        }
+        refreshThresholds()
     }
 
     fun loadHistory() {
         val id = _state.value.installation?.id ?: return
-        _state.value = _state.value.copy(history = store.loadReadings(id))
+        update { it.copy(history = store.loadReadings(id)) }
     }
 
-    fun bootstrapIfEmpty() {
-        val existing = store.listInstallationIds().firstOrNull()
-        if (existing != null) {
-            openInstallation(existing)
-        } else {
-            val starter = Installation(
-                id = "board-1",
-                name = "Board 1",
-                circuits = listOf(
-                    Circuit("c1", "Circuit 1", breakerRatingA = 6.0),
-                    Circuit("c2", "Circuit 2", breakerRatingA = 16.0),
-                    Circuit("c3", "Circuit 3", breakerRatingA = 16.0),
-                ),
-            )
-            store.saveInstallation(starter)
-            _state.value = _state.value.copy(installation = starter)
-        }
-        _state.value.installation?.circuits?.firstOrNull()?.let { selectCircuit(it.id) }
-    }
+    fun clearError() = update { it.copy(error = null) }
 
-    fun openInstallation(id: String) {
-        _state.value = _state.value.copy(installation = store.loadInstallation(id))
-    }
+    // ---- reference ----
 
-    fun selectCircuit(circuitId: String) {
-        _state.value = _state.value.copy(selectedCircuitId = circuitId, lastFaults = emptyList())
-        refreshThresholds()
-    }
+    fun beginReference() = update { it.copy(referenceJustRecorded = false, error = null) }
 
     /**
      * Records a reference for the selected circuit.
@@ -129,36 +254,28 @@ class TaarViewModel(
     fun recordBaseline() {
         val circuit = selectedCircuit ?: return
         val installation = _state.value.installation ?: return
+        if (_state.value.busy) return
 
         viewModelScope.launch {
-            _state.value = _state.value.copy(busy = true, baselineProgress = 0, message = null)
+            update { it.copy(referenceJustRecorded = false, error = null) }
+            val captures = captureSeries(CaptureKind.REFERENCE, Baseline.MIN_SAMPLES)
 
-            val fields = mutableListOf<Double>()
-            val arcs = mutableListOf<Double>()
-            val lines = mutableListOf<Double>()
-
-            repeat(Baseline.MIN_SAMPLES) { i ->
-                val r = coordinator.capture()
-                if (r != null) {
-                    fields += r.fieldAmplitudeUt
-                    arcs += r.arcModulationIndex
-                    lines += r.lineConfidence
+            if (captures.size < Baseline.MIN_SAMPLES) {
+                update {
+                    it.copy(
+                        capture = null,
+                        error = "Only ${captures.size} of ${Baseline.MIN_SAMPLES} captures worked. " +
+                            "Run the phone check, then try again.",
+                    )
                 }
-                _state.value = _state.value.copy(baselineProgress = i + 1)
-            }
-
-            if (fields.size < Baseline.MIN_SAMPLES) {
-                _state.value = _state.value.copy(
-                    busy = false,
-                    message = "Only ${fields.size} of ${Baseline.MIN_SAMPLES} captures succeeded. " +
-                        "Check the pre-check screen.",
-                )
                 return@launch
             }
 
             val baseline = Baseline(
                 System.currentTimeMillis(),
-                fields.toDoubleArray(), arcs.toDoubleArray(), lines.toDoubleArray(),
+                captures.map { it.fieldAmplitudeUt }.toDoubleArray(),
+                captures.map { it.arcModulationIndex }.toDoubleArray(),
+                captures.map { it.lineConfidence }.toDoubleArray(),
             )
             val updated = installation.copy(
                 circuits = installation.circuits.map {
@@ -166,13 +283,15 @@ class TaarViewModel(
                 },
             )
             store.saveInstallation(updated)
-            _state.value = _state.value.copy(
-                installation = updated, busy = false,
-                message = "Reference recorded for ${circuit.label}.",
-            )
+            update { it.copy(installation = updated, capture = null, referenceJustRecorded = true) }
+            refreshInstallations()
             refreshThresholds()
         }
     }
+
+    // ---- measure ----
+
+    fun setSupplyIsolated(isolated: Boolean) = update { it.copy(supplyIsolated = isolated) }
 
     /**
      * Captures once and diagnoses.
@@ -184,20 +303,25 @@ class TaarViewModel(
     fun measure() {
         val circuit = selectedCircuit ?: return
         val installation = _state.value.installation ?: return
+        if (_state.value.busy) return
 
         if (circuit.baseline?.isSufficient != true) {
-            _state.value = _state.value.copy(
-                message = "Record a reference for this circuit first.",
-            )
+            update { it.copy(error = "Record a reference for this circuit first.") }
             return
         }
 
         viewModelScope.launch {
-            _state.value = _state.value.copy(busy = true, message = null)
-
-            val result = coordinator.capture()
+            // Cleared before capturing, so the screen can never show the previous
+            // reading while the new one is still being taken.
+            update {
+                it.copy(
+                    lastReading = null, lastFaults = emptyList(), lastLabel = null,
+                    lastImpliedCurrentA = null, spectrogram = null, prediction = null, error = null,
+                )
+            }
+            val result = captureSeries(CaptureKind.MEASURE, 1).firstOrNull()
             if (result == null) {
-                _state.value = _state.value.copy(busy = false, message = "Capture failed.")
+                update { it.copy(capture = null, error = "The capture failed. Run the phone check, then try again.") }
                 return@launch
             }
 
@@ -209,6 +333,7 @@ class TaarViewModel(
                 lineContrast = result.lineContrast,
                 arcModulationIndex = result.arcModulationIndex,
                 fieldEstimateUsable = result.fieldEstimateUsable,
+                supplyIsolated = _state.value.supplyIsolated,
             )
 
             val metrics = Metrics.derive(reading, circuit)
@@ -223,14 +348,17 @@ class TaarViewModel(
             trainClassifier(installation.id)
             val prediction = metrics?.let { classifier.classify(Features.of(it)) }
 
-            _state.value = _state.value.copy(
-                busy = false,
-                lastReading = reading,
-                lastFaults = ranked,
-                lastStatus = RulesEngine.status(ranked),
-                spectrogram = result.spectrogram,
-                prediction = prediction,
-            )
+            update {
+                it.copy(
+                    capture = null,
+                    lastReading = reading,
+                    lastFaults = ranked,
+                    lastStatus = RulesEngine.status(ranked),
+                    lastImpliedCurrentA = metrics?.impliedCurrentA,
+                    spectrogram = result.spectrogram,
+                    prediction = prediction,
+                )
+            }
         }
     }
 
@@ -238,13 +366,90 @@ class TaarViewModel(
     fun label(status: Status) {
         val reading = _state.value.lastReading ?: return
         val installation = _state.value.installation ?: return
-        if (installation.isBenchRig) {
-            _state.value = _state.value.copy(
-                message = "Bench rig — label recorded but excluded from calibration.",
-            )
-        }
+        if (_state.value.lastLabel != null) return
         store.appendReading(installation.id, reading, status)
-        refreshThresholds()
+        update { it.copy(lastLabel = status) }
+        if (!installation.isBenchRig) refreshThresholds()
+    }
+
+    // ---- amp calibration ----
+
+    fun beginCalibration() = update { it.copy(calibration = Calibration(), error = null) }
+
+    fun setCalibrationWatts(watts: String) =
+        update { it.copy(calibration = it.calibration.copy(watts = watts).withResult()) }
+
+    fun captureCalibration(applianceOn: Boolean) {
+        if (_state.value.busy || selectedCircuit == null) return
+        viewModelScope.launch {
+            val kind = if (applianceOn) CaptureKind.CALIBRATE_ON else CaptureKind.CALIBRATE_OFF
+            val captures = captureSeries(kind, CALIBRATION_CAPTURES)
+            update { s ->
+                val c = s.calibration
+                val next = if (applianceOn) {
+                    c.copy(
+                        onFields = captures.filter { it.fieldEstimateUsable }.map { it.fieldAmplitudeUt },
+                        onConfidences = captures.filter { it.fieldEstimateUsable }.map { it.lineConfidence },
+                    )
+                } else {
+                    // A new OFF run invalidates any ON run taken against the old one.
+                    Calibration(
+                        watts = c.watts,
+                        offFields = captures.filter { it.fieldEstimateUsable }.map { it.fieldAmplitudeUt },
+                        offConfidences = captures.filter { it.fieldEstimateUsable }.map { it.lineConfidence },
+                    )
+                }
+                s.copy(capture = null, calibration = next.withResult())
+            }
+        }
+    }
+
+    private fun Calibration.withResult(): Calibration {
+        if (!offDone || !onDone) return copy(result = null, saved = false)
+        val amps = watts.toDoubleOrNull()?.let { AmpCalibration.ampsFromWatts(it) } ?: 0.0
+        return copy(
+            result = AmpCalibration.calibrate(offFields, offConfidences, onFields, onConfidences, amps),
+            saved = false,
+        )
+    }
+
+    fun saveCalibration() {
+        val ok = _state.value.calibration.result as? AmpCalibration.Result.Ok ?: return
+        val circuit = selectedCircuit ?: return
+        val installation = _state.value.installation ?: return
+        saveInstallation(
+            installation.copy(
+                circuits = installation.circuits.map {
+                    if (it.id == circuit.id) it.copy(utPerAmp = ok.utPerAmp) else it
+                },
+            ),
+        )
+        update { it.copy(calibration = it.calibration.copy(saved = true)) }
+    }
+
+    fun clearCalibration() {
+        val circuit = selectedCircuit ?: return
+        val installation = _state.value.installation ?: return
+        saveInstallation(
+            installation.copy(
+                circuits = installation.circuits.map {
+                    if (it.id == circuit.id) it.copy(utPerAmp = null) else it
+                },
+            ),
+        )
+        beginCalibration()
+    }
+
+    // ---- internals ----
+
+    /** Runs [count] captures back to back, publishing progress. Failed captures are dropped. */
+    private suspend fun captureSeries(kind: CaptureKind, count: Int): List<CaptureCoordinator.Reading> {
+        val out = mutableListOf<CaptureCoordinator.Reading>()
+        for (i in 1..count) {
+            update { it.copy(capture = CaptureProgress(kind, i, count)) }
+            coordinator.capture()?.let { out += it }
+        }
+        return out
     }
 
     /**
@@ -268,17 +473,25 @@ class TaarViewModel(
     }
 
     private fun refreshThresholds() {
-        val circuit = selectedCircuit ?: return
-        val installation = _state.value.installation ?: return
-        val baseline = circuit.baseline ?: return
-        if (installation.isBenchRig) return
-        _state.value = _state.value.copy(
-            thresholds = store.calibrate(installation.id, circuit.id, baseline),
-        )
+        val circuit = selectedCircuit
+        val installation = _state.value.installation
+        val baseline = circuit?.baseline
+        if (installation == null || baseline == null || installation.isBenchRig) {
+            update { it.copy(thresholds = Thresholds.DEFAULT) }
+            return
+        }
+        update { it.copy(thresholds = store.calibrate(installation.id, circuit.id, baseline)) }
     }
 
     private companion object {
         /** Below this a centroid is one or two points and means nothing. */
         const val MIN_TRAINING_SAMPLES = 6
+
+        /** Per appliance state. Three gives a median that one bad capture cannot move. */
+        const val CALIBRATION_CAPTURES = 3
+
+        const val KEY_BOARD = "board"
+        const val KEY_CIRCUIT = "circuit"
+        const val KEY_PHONE_CHECK = "phone_check"
     }
 }

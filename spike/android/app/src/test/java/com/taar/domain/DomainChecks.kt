@@ -49,6 +49,7 @@ object DomainChecks {
         calibrationRefusesWhenOffAlreadyFlowing(),
         calibrationRefusesWhenOnShowsNothing(),
         storeRoundTripsSupplyIsolated(),
+        storeRoundTripsSettings(),
     )
 
     private fun check(name: String, block: () -> String?): Result =
@@ -589,6 +590,19 @@ object DomainChecks {
         store.appendReading("b", reading(isolated = false))
         val back = store.loadReadings("b").map { it.reading.supplyIsolated }
         if (back != listOf(true, false)) "read back $back" else null
+    }
+
+    fun storeRoundTripsSettings() = check("store round-trips settings") {
+        val store = Store(MemoryFileSystem())
+        store.saveSetting("circuit", "c\ttab")
+        store.saveSetting("board", "Home")
+        store.saveSetting("board", "Shop")
+        when {
+            store.loadSetting("circuit") != "c\ttab" -> "circuit read ${store.loadSetting("circuit")}"
+            store.loadSetting("board") != "Shop" -> "board read ${store.loadSetting("board")}"
+            store.loadSetting("missing") != null -> "missing key returned a value"
+            else -> null
+        }
     }
 
 }

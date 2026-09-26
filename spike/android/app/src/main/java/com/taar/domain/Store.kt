@@ -131,6 +131,36 @@ class Store(private val fs: FileSystem) {
     fun listInstallationIds(): List<String> =
         fs.list("installation/").map { it.removePrefix("installation/").removeSuffix(".tsv") }
 
+    // ---- settings ----
+
+    private val settingsPath = "settings.tsv"
+
+    /**
+     * Small key-value settings: which circuit was open, the last phone check.
+     * Without this every launch reopened the first board, so a technician who had
+     * set up "Kettle" found themselves measuring "Circuit 1" without noticing.
+     */
+    fun saveSetting(key: String, value: String) {
+        val all = loadSettings().toMutableMap()
+        all[key] = value
+        val sb = StringBuilder()
+        sb.appendLine(VERSION)
+        for ((k, v) in all) sb.appendLine(esc(k) + SEP + esc(v))
+        fs.write(settingsPath, sb.toString())
+    }
+
+    fun loadSetting(key: String): String? = loadSettings()[key]
+
+    private fun loadSettings(): Map<String, String> {
+        val text = fs.read(settingsPath) ?: return emptyMap()
+        val lines = text.lineSequence().filter { it.isNotBlank() }.toList()
+        if (lines.firstOrNull() != VERSION) return emptyMap()
+        return lines.drop(1).mapNotNull { line ->
+            val f = line.split(SEP)
+            if (f.size < 2) null else unesc(f[0]) to unesc(f[1])
+        }.toMap()
+    }
+
     // ---- readings ----
 
     private fun readingsPath(installationId: String) = "readings/$installationId.tsv"
