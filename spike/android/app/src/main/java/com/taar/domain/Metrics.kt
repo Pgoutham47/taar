@@ -26,31 +26,43 @@ data class Metrics(
     /** False when the field amplitude is not usable and load rules must be skipped. */
     val fieldUsable: Boolean,
 ) {
-    /** Mains detected now. */
-    val isLive: Boolean get() = lineConfidence >= LIVE_CONFIDENCE
+    val lineState: LineState get() = LineState.of(lineConfidence)
+
+    /** Current is flowing now. */
+    val isLive: Boolean get() = lineState == LineState.FLOWING
 
     /** Was live when the baseline was taken, so being dead now is a change. */
-    val wasLive: Boolean get() = baselineLineConfidence >= LIVE_CONFIDENCE
+    val wasLive: Boolean get() = LineState.of(baselineLineConfidence) == LineState.FLOWING
 
     companion object {
         /**
-         * Confidence above which a line component is considered present.
+         * Confidence at or above which current is considered to be flowing.
          *
-         * Set from measurement, not from the simulation. Six captures against a
-         * fridge supply cable, phone taped in place and not moved between them:
+         * Set from measurement. Contrast maps to confidence as c / (c + 9).
          *
-         *     no current      3x, 2x, 2x contrast
-         *     compressor on   9x, 16x
+         *     fridge   21 Sept  idle  3x 2x 2x                 running  9x 16x
+         *     charger  21 Sept  idle  6x                       on       1x
+         *     kettle   26 Sept  idle  3x 1x 6x 3x 0x 4x 5x 7x  on       28x 37x 43x 58x 62x
          *
-         * Midway between those populations is 6x, which maps to 0.40. The previous
-         * 0.30 came from synthetic data and sat at 3.9x -- close enough to the
-         * no-current readings that an idle circuit could be called live, which is
-         * what happened.
+         * The kettle is 1200 W, about 5.2 A. The charger's "on" was a third of an
+         * amp through a twin cable and detected nothing.
          *
-         * Six captures on one phone against one appliance. Repeat on the loaner
-         * against a larger load before trusting this far.
+         * The old 0.40 (6x) sat inside the no-current range: the kettle's last idle
+         * capture read 7x and was reported as live. 0.60 is 13.5x, roughly midway
+         * on a log scale between the highest idle (7x) and the lowest kettle
+         * reading (28x).
          */
-        const val LIVE_CONFIDENCE = 0.40
+        const val LIVE_CONFIDENCE = 0.60
+
+        /**
+         * Confidence below which no current is considered to be flowing. 0.47 is 8x,
+         * just above the highest idle capture seen so far.
+         *
+         * Between this and [LIVE_CONFIDENCE] the reading is [LineState.UNCLEAR].
+         * The band is deliberate: the fridge's 9x sits in it, and a small load that
+         * close to room noise should be measured again rather than called either way.
+         */
+        const val IDLE_CONFIDENCE = 0.47
 
         /**
          * Floors for the baseline spread. Below these, a baseline is flat because
@@ -101,4 +113,29 @@ data class Metrics(
 
     /** Magnitude of change, ignoring direction, for ranking how far off a reading is. */
     val worstZ: Double get() = maxOf(abs(loadZ), abs(arcZ))
+}
+
+/** What the 50 Hz signal says about current in the cable, in the terms shown on screen. */
+enum class LineState {
+    /** Nothing above room noise. Says nothing about voltage. */
+    NONE,
+
+    /** Above room noise but not clearly current. Measure again. */
+    UNCLEAR,
+
+    /** Current is flowing in the cable. */
+    FLOWING;
+
+    companion object {
+        fun of(confidence: Double): LineState = when {
+            confidence >= Metrics.LIVE_CONFIDENCE -> FLOWING
+            confidence >= Metrics.IDLE_CONFIDENCE -> UNCLEAR
+            else -> NONE
+        }
+
+        /** Inverse of the contrast-to-confidence mapping, for display. */
+        fun contrastOf(confidence: Double): Double =
+            if (confidence >= 1.0) Double.POSITIVE_INFINITY
+            else 9.0 * confidence / (1.0 - confidence)
+    }
 }

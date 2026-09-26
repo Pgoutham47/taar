@@ -459,17 +459,22 @@ object DomainChecks {
         check("live threshold sits between the measured populations") {
             fun confidence(contrast: Double) = contrast / (contrast + 9.0)
 
-            val noCurrent = listOf(3.0, 2.0, 2.0)
-            val compressorRunning = listOf(9.0, 16.0)
+            // Every capture on real hardware so far. See Metrics.LIVE_CONFIDENCE.
+            val idle = listOf(3.0, 2.0, 2.0, 6.0, 3.0, 1.0, 6.0, 3.0, 0.0, 4.0, 5.0, 7.0)
+            val kettleOn = listOf(28.0, 37.0, 43.0, 58.0, 62.0)
+            val fridgeOn = listOf(9.0, 16.0)
 
-            val highestIdle = noCurrent.maxOf { confidence(it) }
-            val lowestLive = compressorRunning.minOf { confidence(it) }
+            val idleStates = idle.map { LineState.of(confidence(it)) }
+            val kettleStates = kettleOn.map { LineState.of(confidence(it)) }
+            val fridgeStates = fridgeOn.map { LineState.of(confidence(it)) }
 
             when {
-                highestIdle >= Metrics.LIVE_CONFIDENCE ->
-                    "an idle capture (${"%.2f".format(highestIdle)}) reads as live"
-                lowestLive <= Metrics.LIVE_CONFIDENCE ->
-                    "a live capture (${"%.2f".format(lowestLive)}) reads as idle"
+                idleStates.any { it != LineState.NONE } ->
+                    "an idle capture read as ${idleStates.first { it != LineState.NONE }}"
+                kettleStates.any { it != LineState.FLOWING } ->
+                    "a kettle capture read as ${kettleStates.first { it != LineState.FLOWING }}"
+                // A small load near room noise may be unclear, but never "no current".
+                fridgeStates.any { it == LineState.NONE } -> "a running fridge read as no current"
                 else -> null
             }
         }
