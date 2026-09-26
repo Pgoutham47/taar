@@ -14,6 +14,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -184,4 +188,77 @@ private fun tagOf(v: Fusion.Verdict) = when (v) {
     Fusion.Verdict.AGAINST -> "points to normal"
     Fusion.Verdict.NEUTRAL -> "context"
     Fusion.Verdict.UNAVAILABLE -> "not available"
+}
+
+/**
+ * Ask Taar AI: the on-device language model explaining the result above in plain
+ * English. It never replaces the result; it only answers questions about it.
+ */
+@Composable
+fun AssistantPanel(
+    a: TaarViewModel.Assistant,
+    onAsk: (String) -> Unit,
+    onImportModel: (android.net.Uri) -> Unit,
+) {
+    val pick = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.OpenDocument(),
+    ) { uri -> uri?.let(onImportModel) }
+    var question by rememberSaveable { mutableStateOf("") }
+
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("ASK TAAR AI", style = MaterialTheme.typography.labelLarge, color = TaarPalette.Grey)
+            Hint("Qwen2.5 · 0.5B · runs on this phone, offline · English")
+
+            when {
+                a.importing != null -> {
+                    Text("Copying the model… ${(a.importing * 100).toInt()}%", style = MaterialTheme.typography.bodyMedium)
+                    androidx.compose.material3.LinearProgressIndicator(
+                        progress = { a.importing }, modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+                !a.installed -> {
+                    Text(
+                        "One-time setup: copy the model file (about 550 MB) to this phone, then pick it here.",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Hint("File: ${com.taar.ml.TaarAssistant.MODEL_NAME}")
+                    OutlinedButton(onClick = { pick.launch(arrayOf("*/*")) }, modifier = Modifier.fillMaxWidth()) {
+                        Text("Load model file")
+                    }
+                }
+                else -> {
+                    for (p in com.taar.domain.AssistantPrompt.PRESETS) {
+                        OutlinedButton(onClick = { onAsk(p) }, enabled = !a.busy, modifier = Modifier.fillMaxWidth()) {
+                            Text(p)
+                        }
+                    }
+                    androidx.compose.material3.OutlinedTextField(
+                        value = question,
+                        onValueChange = { question = it.take(300) },
+                        label = { Text("Or ask your own question") },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !a.busy,
+                    )
+                    Button(
+                        onClick = { onAsk(question); question = "" },
+                        enabled = !a.busy && question.isNotBlank(),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text("Ask") }
+                }
+            }
+
+            a.question?.let { Text("Q: $it", style = MaterialTheme.typography.titleSmall) }
+            if (a.busy && a.answer.isEmpty()) {
+                Hint("Thinking… the first answer takes a few seconds while the model loads.")
+            }
+            if (a.answer.isNotEmpty()) Text(a.answer, style = MaterialTheme.typography.bodyMedium)
+            for (c in a.concerns) Hint("⚠ $c", color = TaarPalette.Amber)
+            a.error?.let { Hint(it, color = TaarPalette.Red) }
+            if (a.answer.isNotEmpty() || a.busy) {
+                Hint("Written on this phone by a small language model from the evidence above. It can be wrong; " +
+                    "the result above is what to act on.")
+            }
+        }
+    }
 }

@@ -73,6 +73,9 @@ object DomainChecks {
         scanDownweightsFairPoints(),
         scanStrengthIsBounded(),
         scanStoreRoundTrips(),
+        assistantPromptCarriesEvidenceAndRules(),
+        assistantPromptStaysInsideTheWindow(),
+        assistantFlagsCertaintyAboutSafety(),
     )
 
     private fun check(name: String, block: () -> String?): Result =
@@ -870,5 +873,38 @@ object DomainChecks {
             back.epochMillis != 42L -> "time ${back.epochMillis}"
             else -> null
         }
+    }
+
+    // ---- assistant prompt ----
+
+    fun assistantPromptCarriesEvidenceAndRules() =
+        check("assistant: the prompt carries the result, its evidence and the safety rules") {
+            val a = fuse(reading(arc = 0.5), ai = 0.95f)
+            val p = AssistantPrompt.build(a, "Kitchen", 16.0, "What should I do next?")
+            when {
+                a.outcome.title !in p -> "result title missing"
+                "Arc signal (rule)" !in p -> "evidence missing"
+                "Never say a wire or circuit is safe or unsafe" !in p -> "safety rule missing"
+                "Question: What should I do next?" !in p -> "question missing"
+                !p.startsWith("<|im_start|>system") || !p.endsWith("<|im_start|>assistant\n") -> "chat format wrong"
+                "Kitchen, breaker 16 A" !in p -> "circuit missing"
+                else -> null
+            }
+        }
+
+    fun assistantPromptStaysInsideTheWindow() = check("assistant: the facts stay within their budget") {
+        val a = fuse(reading(field = 20.0, arc = 0.5), ai = 0.9f, motion = 0.6)
+        val long = a.copy(why = List(40) { "a very long reason ".repeat(20) })
+        val facts = AssistantPrompt.facts(long, "x".repeat(500), 16.0)
+        if (facts.length > AssistantPrompt.MAX_FACTS_CHARS) "facts ${facts.length} chars" else null
+    }
+
+    fun assistantFlagsCertaintyAboutSafety() = check("assistant: certain safety claims are flagged, hedged ones are not") {
+        val bad = listOf("This wire is safe to touch.", "It's completely safe.", "There is no danger here.",
+            "This is definitely a loose connection.")
+        val fine = listOf("Taar cannot say whether it is safe.", "The phone can not prove the wire is safe.",
+            "Possible arcing was observed. Have the connections checked.")
+        bad.firstOrNull { AssistantPrompt.concerns(it).isEmpty() }?.let { "missed: $it" }
+            ?: fine.firstOrNull { AssistantPrompt.concerns(it).isNotEmpty() }?.let { "false alarm: $it" }
     }
 }

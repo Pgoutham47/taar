@@ -29,6 +29,7 @@ import com.taar.sensor.CaptureCoordinator
 import com.taar.sensor.MagCapture
 import com.taar.sensor.MotionCapture
 import com.taar.ml.ArcModel
+import com.taar.ml.TaarAssistant
 
 /**
  * Wiring and navigation.
@@ -49,6 +50,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var mag: MagCapture
     private lateinit var audio: AudioCapture
     private var arcModel: ArcModel? = null
+    private lateinit var assistant: TaarAssistant
 
     private var audioGranted by mutableStateOf(false)
 
@@ -66,7 +68,8 @@ class MainActivity : ComponentActivity() {
         arcModel = ArcModel.load(this)
         val coordinator = CaptureCoordinator(mag, audio, MotionCapture(sensorManager), arcModel)
         val files = AndroidFileSystem(this)
-        viewModel = TaarViewModel(coordinator, store, ScanStore(files), arcModel?.selfCheck)
+        assistant = TaarAssistant(this)
+        viewModel = TaarViewModel(coordinator, store, ScanStore(files), assistant, arcModel?.selfCheck)
         viewModel.bootstrap()
 
         audioGranted = ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) ==
@@ -138,6 +141,8 @@ class MainActivity : ComponentActivity() {
                             onSupplyIsolated = { viewModel.setSupplyIsolated(it) },
                             onMeasure = { viewModel.measure() },
                             onLabel = { viewModel.label(it) },
+                            onAsk = { viewModel.askAssistant(it) },
+                            onImportModel = { viewModel.importAssistantModel(it) },
                             onBack = home,
                         )
 
@@ -194,6 +199,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         arcModel?.close()
+        assistant.close()
         super.onDestroy()
     }
 }

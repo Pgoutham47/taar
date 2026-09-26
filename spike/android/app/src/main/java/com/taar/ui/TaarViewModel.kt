@@ -7,6 +7,7 @@ import com.taar.domain.Baseline
 import com.taar.domain.Classifier
 import com.taar.domain.CentroidClassifier
 import com.taar.domain.CableScan
+import com.taar.domain.AssistantPrompt
 import com.taar.domain.Features
 import com.taar.domain.Fusion
 import com.taar.domain.LabelledSample
@@ -22,6 +23,7 @@ import com.taar.domain.Status
 import com.taar.domain.Store
 import com.taar.domain.Thresholds
 import com.taar.ml.ArcModel
+import com.taar.ml.TaarAssistant
 import com.taar.sensor.CaptureCoordinator
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -40,6 +42,7 @@ class TaarViewModel(
     private val coordinator: CaptureCoordinator,
     private val store: Store,
     private val scanStore: ScanStore,
+    private val assistant: TaarAssistant,
     /** Null when the on-device model did not load. */
     private val aiSelfCheck: ArcModel.SelfCheck? = null,
 ) : ViewModel() {
@@ -67,6 +70,18 @@ class TaarViewModel(
         val listening: Boolean = false,
         val frame: LiveFrame? = null,
         val captures: Int = 0,
+    )
+
+    /** The on-device language model's panel under a result. */
+    data class Assistant(
+        val installed: Boolean = false,
+        /** 0..1 while the model file is being copied in. */
+        val importing: Float? = null,
+        val busy: Boolean = false,
+        val question: String? = null,
+        val answer: String = "",
+        val concerns: List<String> = emptyList(),
+        val error: String? = null,
     )
 
     /** A Cable Scan in progress or just finished. */
@@ -133,11 +148,14 @@ class TaarViewModel(
         /** Earlier Cable Scans of the selected circuit, newest first. */
         val scanHistory: List<ScanStore.Session> = emptyList(),
         val live: Live = Live(),
+        val assistant: Assistant = Assistant(),
     ) {
         val busy: Boolean get() = capture != null || scan?.running == true || live.running
     }
 
-    private val _state = MutableStateFlow(UiState(aiSelfCheck = aiSelfCheck))
+    private val _state = MutableStateFlow(
+        UiState(aiSelfCheck = aiSelfCheck, assistant = Assistant(installed = assistant.installed)),
+    )
     val state: StateFlow<UiState> = _state.asStateFlow()
 
     val selectedCircuit: Circuit?
@@ -376,6 +394,7 @@ class TaarViewModel(
                     lastReading = null, lastFaults = emptyList(), lastLabel = null,
                     lastImpliedCurrentA = null, spectrogram = null, prediction = null,
                     aiArcProbability = null, lastMotion = null, fusion = null, error = null,
+                    assistant = it.assistant.copy(question = null, answer = "", concerns = emptyList(), error = null),
                 )
             }
             val result = captureSeries(CaptureKind.MEASURE, 1).firstOrNull()
@@ -438,6 +457,40 @@ class TaarViewModel(
                     lastMotion = result.motionRadPerS,
                     fusion = fusion,
                 )
+            }
+        }
+    }
+
+    // ---- on-device assistant ----
+
+    /** Copies the model file the technician picked into private storage. */
+    fun importAssistantModel(uri: android.net.Uri) {
+        if (_state.value.assistant.importing != null || _state.value.assistant.busy) return
+        update { it.copy(assistant = it.assistant.copy(importing = 0f, error = null)) }
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val error = assistant.import(uri) { p -> update { it.copy(assistant = it.assistant.copy(importing = p)) } }
+            update { it.copy(assistant = it.assistant.copy(importing = null, installed = assistant.installed, error = error)) }
+        }
+    }
+
+    /**
+     * Asks the model about the result on screen. It sees only that result's
+     * evidence; the answer streams in, and is checked for certainty about safety.
+     */
+    fun askAssistant(question: String) {
+        val analysis = _state.value.fusion ?: return
+        if (_state.value.assistant.busy) return
+        val circuit = selectedCircuit
+        val prompt = AssistantPrompt.build(analysis, circuit?.label, circuit?.breakerRatingA, question)
+        update { it.copy(assistant = it.assistant.copy(busy = true, question = question.trim().ifEmpty {
+            AssistantPrompt.PRESETS[0] }, answer = "", concerns = emptyList(), error = null)) }
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val error = assistant.generate(prompt) { text ->
+                update { it.copy(assistant = it.assistant.copy(answer = text)) }
+            }
+            update {
+                it.copy(assistant = it.assistant.copy(busy = false, error = error,
+                    concerns = AssistantPrompt.concerns(it.assistant.answer)))
             }
         }
     }

@@ -16,9 +16,9 @@ android {
         versionName = "0.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        // LiteRT ships a native library per ABI. The iQOO is arm64; x86_64 keeps the
-        // emulator working. Dropping the other two saves about 10 MB of APK.
-        ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
+        // LiteRT and the LLM engine ship native libraries per ABI. The iQOO, like nearly
+        // every phone since 2019, is arm64; the others would add about 60 MB for no device.
+        ndk { abiFilters += listOf("arm64-v8a") }
     }
 
     buildTypes {
@@ -39,7 +39,12 @@ android {
     // read them from disk, and shipping 30 KB of CSV in the APK serves nobody.
     testOptions.unitTests.all { it.workingDir = project.projectDir }
 
-    packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }
+    packaging {
+        resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        // Compress the native libraries: the LLM engine alone is 27 MB stored raw, and the
+        // APK travels by WhatsApp. The phone unpacks them once at install.
+        jniLibs.useLegacyPackaging = true
+    }
 }
 
 dependencies {
@@ -53,6 +58,9 @@ dependencies {
     // On-device arc model (assets/taar_arc.tflite). 1.4.x rather than 2.x: 2.x pulls in
     // lifecycle 2.10 and guava, and this needs nothing but the interpreter.
     implementation("com.google.ai.edge.litert:litert:1.4.2")
+    // On-device assistant: Qwen2.5-0.5B through MediaPipe LLM Inference. 0.10.35 has no
+    // Kotlin dependency; Google's newer LiteRT-LM needs Kotlin 2.4.
+    implementation("com.google.mediapipe:tasks-genai:0.10.35")
 
     testImplementation("junit:junit:4.13.2")
 

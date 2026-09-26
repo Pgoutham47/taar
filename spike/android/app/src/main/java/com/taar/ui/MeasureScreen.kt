@@ -54,6 +54,8 @@ fun MeasureScreen(
     onSupplyIsolated: (Boolean) -> Unit,
     onMeasure: () -> Unit,
     onLabel: (Status) -> Unit,
+    onAsk: (String) -> Unit,
+    onImportModel: (android.net.Uri) -> Unit,
     onBack: () -> Unit,
 ) {
     var started by rememberSaveable { mutableStateOf(false) }
@@ -107,6 +109,8 @@ fun MeasureScreen(
                 reading = reading,
                 circuit = circuit,
                 onWhy = { showWhy = true },
+                onAsk = onAsk,
+                onImportModel = onImportModel,
                 onMeasureAgain = measure,
                 onChangeSetup = { started = false },
                 onLabel = onLabel,
@@ -176,6 +180,8 @@ private fun ResultStage(
     reading: Reading,
     circuit: Circuit,
     onWhy: () -> Unit,
+    onAsk: (String) -> Unit,
+    onImportModel: (android.net.Uri) -> Unit,
     onMeasureAgain: () -> Unit,
     onChangeSetup: () -> Unit,
     onLabel: (Status) -> Unit,
@@ -183,7 +189,10 @@ private fun ResultStage(
 ) {
     // One result first: what every signal adds up to. Without a fusion result
     // (no metrics) the individual results are all there is, so they open.
-    state.fusion?.let { FusionCard(it, onWhy) }
+    state.fusion?.let {
+        FusionCard(it, onWhy)
+        AssistantPanel(state.assistant, onAsk, onImportModel)
+    }
 
     Button(onClick = onMeasureAgain, modifier = Modifier.fillMaxWidth().height(56.dp)) {
         Text("Measure again", style = MaterialTheme.typography.titleMedium)
