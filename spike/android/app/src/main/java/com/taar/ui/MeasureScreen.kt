@@ -325,7 +325,14 @@ private fun Details(state: TaarViewModel.UiState, reading: Reading, circuit: Cir
                         "Warns at %.1f, critical at %.1f%s."
                             .format(t.warningZ, t.criticalZ, if (t.isProvisional) " (defaults until you teach Taar)" else ""),
                 )
-                Metric("Load vs reference", "%+.1f".format(m.loadZ))
+                m.referenceCurrentA?.let { ref ->
+                    Metric(
+                        "Current now / at reference",
+                        "%.1f A / %.1f A".format(m.currentNowA ?: 0.0, ref),
+                        "Warns when current is at least %.0f A and 1.5 times higher than at the reference."
+                            .format(Metrics.MIN_CURRENT_RISE_A),
+                    )
+                } ?: Metric("Load vs reference", "%+.1f".format(m.loadZ))
                 Metric("Sparking signal vs reference", "%+.1f".format(m.arcZ))
                 Metric("Sparking signal (raw)", "%.4f".format(reading.arcModulationIndex))
             }

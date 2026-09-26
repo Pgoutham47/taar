@@ -50,6 +50,9 @@ object DomainChecks {
         calibrationRefusesWhenOnShowsNothing(),
         storeRoundTripsSupplyIsolated(),
         storeRoundTripsSettings(),
+        calibratedKettleRaisesHigherLoad(),
+        calibratedSmallRiseIsNotAHigherLoad(),
+        calibratedIdleIsNotAHigherLoad(),
     )
 
     private fun check(name: String, block: () -> String?): Result =
@@ -605,4 +608,39 @@ object DomainChecks {
         }
     }
 
+    // ---- load in amperes ----
+
+    /** Three reference captures of a calibrated kettle cord, all at [field] and [live]. */
+    private fun kettle(field: Double, live: Double) = Circuit(
+        "c1", "Kettle", breakerRatingA = 16.0, utPerAmp = 0.038,
+        baseline = Baseline(0L, DoubleArray(3) { field }, DoubleArray(3) { 0.02 }, DoubleArray(3) { live }),
+    )
+
+    /**
+     * The case that motivated amperes. Reference with the kettle off, reading with it
+     * boiling: 0.05 to 0.19 uT is about 1 MAD of field and never warned, but it is
+     * 0 A to 5 A.
+     */
+    fun calibratedKettleRaisesHigherLoad() = check("a calibrated kettle switching on is a higher load") {
+        val (ranked, status) = diagnose(kettle(field = 0.05, live = 0.20), reading(field = 0.19, live = 0.83))
+        val ids = ranked.map { it.fault.id }
+        when {
+            "high_load" !in ids -> "raised $ids"
+            "unexpectedly_live" in ids -> "called a kettle a back-feed: $ids"
+            status != Status.WARNING -> "status $status"
+            else -> null
+        }
+    }
+
+    fun calibratedSmallRiseIsNotAHigherLoad() =
+        check("a rise inside the calibration scatter is not a higher load") {
+            // 0.20 to 0.23 uT is 5.3 A to 6.1 A, inside the kettle's own +/-1 A scatter.
+            val (ranked, _) = diagnose(kettle(field = 0.20, live = 0.83), reading(field = 0.23, live = 0.83))
+            if (ranked.any { it.fault.id == "high_load" }) "raised ${ranked.map { it.fault.id }}" else null
+        }
+
+    fun calibratedIdleIsNotAHigherLoad() = check("a calibrated idle reading is not a higher load") {
+        val (ranked, _) = diagnose(kettle(field = 0.05, live = 0.20), reading(field = 0.08, live = 0.30))
+        if (ranked.isNotEmpty()) "raised ${ranked.map { it.fault.id }}" else null
+    }
 }

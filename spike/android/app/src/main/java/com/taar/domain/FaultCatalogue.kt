@@ -77,19 +77,35 @@ object FaultCatalogue {
             id = "high_load",
             label = "Load higher than usual",
             labelTe = "మామూలు కంటే ఎక్కువ లోడ్",
-            action = "This circuit is drawing more than its own baseline. Check what has " +
-                "been added to it since the reference was recorded.",
-            actionTe = "ఈ సర్క్యూట్ మామూలు కంటే ఎక్కువ లాగుతోంది. కొత్తగా ఏమి కలిపారో చూడండి.",
+            action = "This circuit is drawing more current than when its reference was " +
+                "recorded. If you have just switched something on, that is expected. If not, " +
+                "check what has been added to it.",
+            actionTe = "రిఫరెన్స్ తీసుకున్నప్పటి కంటే ఈ సర్క్యూట్ ఎక్కువ కరెంట్ లాగుతోంది. " +
+                "మీరు ఏదైనా ఆన్ చేసి ఉంటే ఇది మామూలే. లేకపోతే కొత్తగా ఏమి కలిపారో చూడండి.",
             severity = Status.WARNING,
             priority = 60,
             evaluate = { m, t ->
+                val now = m.currentNowA
+                val ref = m.referenceCurrentA
                 listOf(
-                    Evidence("load ${fmt(m.loadZ)} MAD above baseline", m.loadZ >= t.warningZ),
+                    Evidence(
+                        if (now != null && ref != null)
+                            "current ${String.format("%.1f", now)} A, was ${String.format("%.1f", ref)} A at reference"
+                        else "load ${fmt(m.loadZ)} MAD above baseline",
+                        m.loadAboveReference(t),
+                    ),
                     Evidence("still within breaker rating", (m.loadVsRating ?: 0.0) < 0.9),
                     Evidence("field estimate usable", m.fieldUsable),
                 )
             },
         ),
+        // Both isolation rules hinge on what the technician says, not on the
+        // reference. The earlier version fired whenever the reference had no current
+        // and the reading did -- which is also what switching on a kettle looks like,
+        // so every ordinary load was reported as a back-feed. A "circuit not live"
+        // rule went for the same reason: a kettle switching off looked like a lost
+        // supply. The phone senses current, not voltage; only the person at the
+        // board knows the breaker is off.
         Fault(
             id = "unexpectedly_live",
             label = "Current on a circuit you switched off",

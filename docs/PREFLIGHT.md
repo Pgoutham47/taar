@@ -266,6 +266,53 @@ populations. A test holds both populations against it.
 **Repeat on the loaner** against a larger load on a separated conductor, and take
 five captures per state rather than three.
 
+### Kettle, 26 Sept — the larger load
+
+1200 W kettle (≈5.2 A at 230 V), 1 L of water, phone flat on the twin supply cord
+about 30 cm from the base, not moved between captures. Reference taken with the
+kettle plugged in and switched off.
+
+| state | contrast | confidence | field |
+|---|---|---|---|
+| off | 3x · 1x · 6x · 3x · 0x | 0.04–0.39 | 0.02–0.08 uT |
+| **boiling** | **28x · 37x · 43x · 58x · 62x** | **0.76–0.87** | **0.18–0.27 uT** |
+| off again | 4x · 5x · 7x | 0.31–0.44 | 0.05–0.07 uT |
+
+Highest idle 7x, lowest boiling 28x: a factor of four, no overlap, and the field
+amplitude separates the two populations on its own as well (0.08 against 0.18).
+This is the result the fridge could only suggest.
+
+**It exposed two faults in the app.**
+
+- **The 0.40 threshold was inside the noise.** The last idle capture read 7x (0.44)
+  and was reported as live. Idle has now reached 6x or 7x in two separate sessions.
+  `LIVE_CONFIDENCE` is now 0.60 (13.5x), and below 0.47 (8x) is "no current". The
+  band between is reported as *unclear — measure again*; the fridge's 9x sits in it.
+- **Every boiling capture raised CRITICAL "live when it should not be".** The rule
+  compared the reading with the reference, and "reference had no current, reading
+  has current" is also exactly what switching on a kettle looks like. The phone
+  senses current, not voltage, so it cannot know a circuit is meant to be off. The
+  rule now fires only when the technician says the supply is switched off. A
+  matching "circuit not live" rule was removed for the same reason.
+
+**Calibration.** Median boiling field 0.25 uT over 5.2 A is about **0.048 uT/A** on
+this cord, against 9.43 uT/A for a single conductor at 3 cm. The live and neutral
+conductors side by side cancel all but about 1/200th. Readings varied ±20% while
+boiling, so an ampere figure from this position is good to about ±1 A. The app now
+has a guided calibration (appliance off, then on) that stores this per circuit.
+
+**"Load higher than usual" could not see the kettle.** The field rose 0.18 uT, and
+the baseline spread floor (`MIN_FIELD_SPREAD_UT`, 0.15 uT) makes that about 1 MAD,
+far under the warn threshold of 4. On a calibrated circuit the rule now compares
+amperes instead: it fires when current is at least 1 A and 1.5 times above the
+reference (0 A to 4.9 A here). Uncalibrated circuits still use the field, and still
+cannot see a load this size on a twin cord.
+
+**Calibration repeated the same night** with the phone re-placed: OFF 3x 1x 5x, ON
+29x 34x 33x, 0.038 uT/A. A measurement straight after read 4.9 A against 5.2 A
+rated, and 3x (no current) once the kettle switched off. 0.038 against the earlier
+0.048 is the phone's position on the cord, which is why calibration is per spot.
+
 ---
 
 ## 4 · Audio path

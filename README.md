@@ -48,21 +48,24 @@ of response time cannot have a network round trip inside it.
 | [`docs/PREFLIGHT.md`](docs/PREFLIGHT.md) | The hour-one measurement form, with the hardware results filled in |
 | [`spike/dsp/`](spike/dsp/) | Can a phone magnetometer see 50 Hz? |
 | [`spike/audio/`](spike/audio/) | Does an arc separate from a ballast, speech, a rustle and a motor? |
-| [`spike/android/`](spike/android/) | The app — builds clean, 36/36 logic checks pass |
+| [`spike/android/`](spike/android/) | The app — builds clean, 55/55 logic checks pass |
 
 ---
 
 ## Measured on hardware
 
-Six captures against a fridge supply cable, phone taped in place:
+Thirteen captures against a 1200 W kettle's supply cord (≈5.2 A), phone lying still
+on the cord:
 
 | state | contrast at 50 Hz |
 |---|---|
-| no current | 3× · 2× · 2× |
-| compressor running | **9× · 16×** |
+| no current | 3× · 1× · 6× · 3× · 0× · 4× · 5× · 7× |
+| kettle boiling | **28× · 37× · 43× · 58× · 62×** |
 
-A factor of three, no overlap. The live threshold is set from that separation rather
-than from simulation. Magnetometer measured at 105.3 Hz over 21 distinct phases;
+A factor of four, no overlap. An earlier fridge test (9× and 16× running, 2–3× idle)
+pointed the same way on a smaller load. The thresholds are set from these
+separations rather than from simulation: under 8× is no current, over 13.5× is
+current flowing, and between is reported as unclear. Magnetometer measured at 105.3 Hz over 21 distinct phases;
 noise floor 0.39–0.40 µT RMS. Full record and caveats in
 [`docs/PREFLIGHT.md`](docs/PREFLIGHT.md) §3.
 

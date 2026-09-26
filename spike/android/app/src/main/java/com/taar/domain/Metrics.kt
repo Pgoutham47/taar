@@ -29,11 +29,37 @@ data class Metrics(
      * tell an isolated circuit from a live one with nothing switched on.
      */
     val supplyIsolated: Boolean = false,
+    /**
+     * Current when the reference was recorded, amperes. Null unless the circuit is
+     * calibrated. Reference captures with no clear current count as 0 A.
+     */
+    val referenceCurrentA: Double? = null,
 ) {
     val lineState: LineState get() = LineState.of(lineConfidence)
 
     /** Current is flowing now. */
     val isLive: Boolean get() = lineState == LineState.FLOWING
+
+    /** Amperes now, counting "no clear current" as 0 A. Null unless calibrated. */
+    val currentNowA: Double?
+        get() = referenceCurrentA?.let { if (fieldUsable) impliedCurrentA ?: 0.0 else null }
+
+    /**
+     * Whether the load is up on the reference.
+     *
+     * In amperes when the circuit is calibrated. On a twin cord the field barely
+     * moves -- the kettle raised it 0.18 uT, about 1 MAD against the 0.15 uT spread
+     * floor -- so a 5 A load never reached the warn threshold. The same change in
+     * amperes is 0 A to 5 A, which no one would call noise.
+     *
+     * Otherwise in MADs of field, as before.
+     */
+    fun loadAboveReference(t: Thresholds): Boolean {
+        val now = currentNowA
+        val ref = referenceCurrentA
+        if (now == null || ref == null) return loadZ >= t.warningZ
+        return now - ref >= MIN_CURRENT_RISE_A && now >= ref * MIN_CURRENT_RATIO
+    }
 
     companion object {
         /**
@@ -82,6 +108,15 @@ data class Metrics(
         const val MIN_FIELD_SPREAD_UT = 0.15
         const val MIN_ARC_SPREAD = 0.010
 
+        /**
+         * A calibrated rise smaller than this is not called a higher load. The
+         * kettle's five boiling captures spanned 0.18-0.27 uT, about +/-1 A at one
+         * calibration, so a smaller change cannot be told from that scatter.
+         */
+        const val MIN_CURRENT_RISE_A = 1.0
+
+        /** And the rise must be half as much again, so a busy circuit is not flagged for a lamp. */
+        const val MIN_CURRENT_RATIO = 1.5
 
         fun derive(reading: Reading, circuit: Circuit): Metrics? {
             val baseline = circuit.baseline ?: return null
@@ -103,6 +138,15 @@ data class Metrics(
                 }
                 ?.let { reading.fieldAmplitudeUt / it }
 
+            val referenceCurrent = circuit.utPerAmp?.takeIf { it > 0 }?.let { k ->
+                Stats.median(
+                    DoubleArray(baseline.sampleCount) { i ->
+                        if (LineState.of(baseline.lineConfidences[i]) == LineState.FLOWING)
+                            baseline.fieldAmplitudesUt[i] / k else 0.0
+                    },
+                )
+            }
+
             val vsRating = current?.let { c ->
                 circuit.breakerRatingA?.takeIf { it > 0 }?.let { c / it }
             }
@@ -115,6 +159,7 @@ data class Metrics(
                 lineConfidence = reading.lineConfidence,
                 fieldUsable = reading.fieldEstimateUsable,
                 supplyIsolated = reading.supplyIsolated,
+                referenceCurrentA = referenceCurrent,
             )
         }
     }
