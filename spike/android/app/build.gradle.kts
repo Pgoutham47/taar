@@ -16,9 +16,9 @@ android {
         versionName = "0.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        // LiteRT and SceneView ship native libraries per ABI. The iQOO, like nearly every
-        // phone since 2019, is arm64; the others would add about 25 MB for no device.
-        ndk { abiFilters += listOf("arm64-v8a") }
+        // LiteRT ships a native library per ABI. The iQOO is arm64; x86_64 keeps the
+        // emulator working. Dropping the other two saves about 10 MB of APK.
+        ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
     }
 
     buildTypes {
@@ -53,9 +53,6 @@ dependencies {
     // On-device arc model (assets/taar_arc.tflite). 1.4.x rather than 2.x: 2.x pulls in
     // lifecycle 2.10 and guava, and this needs nothing but the interpreter.
     implementation("com.google.ai.edge.litert:litert:1.4.2")
-    // Room 3D Scan: camera, surface detection and 3D markers over ARCore. 2.3.0 is the
-    // newest release built for Kotlin 2.0; later ones need Kotlin 2.4.
-    implementation("io.github.sceneview:arsceneview:2.3.0")
 
     testImplementation("junit:junit:4.13.2")
 

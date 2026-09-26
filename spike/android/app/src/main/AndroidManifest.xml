@@ -1,22 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!--
-      There is deliberately no INTERNET permission: the app has no server, no account
-      and nothing to upload, and its absence from the merged manifest is a claim a
-      judge can check in thirty seconds. RECORD_AUDIO is for arc detection; CAMERA is
-      used only by Room 3D Scan, for ARCore's on-device tracking.
+      RECORD_AUDIO is the only permission requested. There is deliberately no
+      INTERNET permission: the app has no server, no account and nothing to upload,
+      and its absence from this file is a claim a judge can check in thirty seconds.
     -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
-    <uses-permission android:name="android.permission.CAMERA" />
-    <!-- SceneView's 3D module asks for this to load models from URLs. Taar loads none. -->
-    <uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
 
     <uses-feature android:name="android.hardware.sensor.compass" android:required="true" />
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
-    <!-- Room 3D Scan is optional: phones without ARCore run everything else. -->
-    <uses-feature android:name="android.hardware.camera.ar" android:required="false" />
 
     <application
         android:allowBackup="false"

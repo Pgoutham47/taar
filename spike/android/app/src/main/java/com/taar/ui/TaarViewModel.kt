@@ -16,8 +16,6 @@ import com.taar.domain.Installation
 import com.taar.domain.Metrics
 import com.taar.domain.RankedFault
 import com.taar.domain.Reading
-import com.taar.domain.RoomMap
-import com.taar.domain.RoomStore
 import com.taar.domain.RulesEngine
 import com.taar.domain.ScanStore
 import com.taar.domain.Status
@@ -42,7 +40,6 @@ class TaarViewModel(
     private val coordinator: CaptureCoordinator,
     private val store: Store,
     private val scanStore: ScanStore,
-    private val roomStore: RoomStore,
     /** Null when the on-device model did not load. */
     private val aiSelfCheck: ArcModel.SelfCheck? = null,
 ) : ViewModel() {
@@ -70,17 +67,6 @@ class TaarViewModel(
         val listening: Boolean = false,
         val frame: LiveFrame? = null,
         val captures: Int = 0,
-    )
-
-    /** A Room 3D Scan in progress, or a finished map. */
-    data class Room(
-        val name: String,
-        val points: List<RoomMap.Point> = emptyList(),
-        /** A point is pinned and waiting for the phone to be pressed on it. */
-        val pendingId: Int? = null,
-        val measuring: Boolean = false,
-        val lastMessage: String? = null,
-        val map: RoomMap.Map? = null,
     )
 
     /** A Cable Scan in progress or just finished. */
@@ -147,11 +133,8 @@ class TaarViewModel(
         /** Earlier Cable Scans of the selected circuit, newest first. */
         val scanHistory: List<ScanStore.Session> = emptyList(),
         val live: Live = Live(),
-        val room: Room? = null,
-        val roomHistory: List<RoomStore.Session> = emptyList(),
     ) {
-        val busy: Boolean get() = capture != null || scan?.running == true || live.running ||
-            room?.measuring == true
+        val busy: Boolean get() = capture != null || scan?.running == true || live.running
     }
 
     private val _state = MutableStateFlow(UiState(aiSelfCheck = aiSelfCheck))
@@ -459,86 +442,6 @@ class TaarViewModel(
         }
     }
 
-    // ---- room 3D scan ----
-
-    private var nextRoomPointId = 0
-
-    fun beginRoomScan() {
-        if (_state.value.busy) return
-        val label = selectedCircuit?.label ?: "Room"
-        update { it.copy(room = Room(label), roomHistory = roomStore.list()) }
-    }
-
-    /** A point was pinned in the room; the next measurement belongs to it. */
-    fun roomPointPinned(): Int {
-        val id = nextRoomPointId++
-        update { it.copy(room = it.room?.copy(pendingId = id, lastMessage = null)) }
-        return id
-    }
-
-    fun cancelRoomPoint() = update { it.copy(room = it.room?.copy(pendingId = null)) }
-
-    /**
-     * Measures at the pinned point: one ordinary capture, interpreted by the shared
-     * pipeline, stored at [position]. Needs the selected circuit's reference, which
-     * for a room is a reading taken at a quiet spot in it.
-     */
-    fun measureRoomPoint(id: Int, position: RoomMap.Vec3) {
-        val circuit = selectedCircuit ?: return
-        if (_state.value.busy || circuit.baseline?.isSufficient != true) return
-        update { it.copy(room = it.room?.copy(measuring = true, lastMessage = null)) }
-        viewModelScope.launch {
-            val result = coordinator.capture()
-            val done = result?.let { interpret(it, circuit, _state.value.thresholds) }
-            val fusion = done?.fusion
-            if (result == null || done == null || done.metrics == null || fusion == null) {
-                update { it.copy(room = it.room?.copy(measuring = false, pendingId = null,
-                    lastMessage = "That capture failed. Pin the spot again and retry.")) }
-                return@launch
-            }
-            val point = RoomMap.Point(
-                id = id,
-                position = position,
-                epochMillis = done.reading.epochMillis,
-                lineConfidence = done.reading.lineConfidence,
-                fieldAmplitudeUt = done.reading.fieldAmplitudeUt,
-                referenceFieldUt = circuit.baseline?.medianFieldUt,
-                currentA = done.metrics.impliedCurrentA,
-                arcZ = done.metrics.arcZ,
-                aiProbability = result.aiArcProbability,
-                outcome = fusion.outcome,
-                strength = fusion.strength,
-                quality = fusion.quality,
-                why = fusion.why,
-            )
-            update {
-                it.copy(room = it.room?.copy(
-                    points = it.room.points + point, measuring = false, pendingId = null,
-                    lastMessage = "Point ${it.room.points.size + 1}: %.0f× · ${fusion.outcome.title}".format(point.contrast) +
-                        if (!point.accepted) " · discarded (phone moved)" else "",
-                ))
-            }
-        }
-    }
-
-    /** Builds the map with ARCore's latest estimate of every pinned point, and saves it. */
-    fun finishRoomScan(planes: List<RoomMap.Plane>, refined: Map<Int, RoomMap.Vec3>) {
-        val room = _state.value.room ?: return
-        if (room.measuring) return
-        val points = room.points.map { p -> refined[p.id]?.let { p.copy(position = it) } ?: p }
-        val map = RoomMap.build(points, planes)
-        if (points.isNotEmpty()) {
-            val now = System.currentTimeMillis()
-            roomStore.save(RoomStore.Session("room-$now", room.name, now, planes, points))
-        }
-        update { it.copy(room = room.copy(points = points, map = map, pendingId = null), roomHistory = roomStore.list()) }
-    }
-
-    fun openRoom(session: RoomStore.Session) {
-        if (_state.value.busy) return
-        update { it.copy(room = Room(session.name, session.points, map = RoomMap.build(session.points, session.planes))) }
-    }
-
     // ---- live physics view ----
 
     @Volatile private var liveOn = false
@@ -681,8 +584,8 @@ class TaarViewModel(
     )
 
     /**
-     * The one place a capture becomes a result, shared by Cable Scan, the live view
-     * and Room Scan. History is left out of the fusion: their points are positions
+     * The one place a capture becomes a result, shared by Cable Scan and the live
+     * view. History is left out of the fusion: their points are positions
      * or moments, not earlier readings of the circuit.
      */
     private fun interpret(result: CaptureCoordinator.Reading, circuit: Circuit, thresholds: Thresholds): Interpreted {

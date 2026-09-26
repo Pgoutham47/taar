@@ -140,10 +140,6 @@ fun HomeScreen(
             colors = ButtonDefaults.buttonColors(containerColor = TaarPalette.Blue),
         ) { Text("See What Taar Sees · live physics", style = MaterialTheme.typography.titleMedium) }
 
-        OutlinedButton(onClick = { onGo(MainActivity.Screen.ROOM) }, modifier = Modifier.fillMaxWidth()) {
-            Text("Room 3D Scan (AR) · experimental")
-        }
-
         if (hasReference) {
             OutlinedButton(onClick = { onGo(MainActivity.Screen.CABLE_SCAN) }, modifier = Modifier.fillMaxWidth()) {
                 Text("Cable Scan · where along the cable?")

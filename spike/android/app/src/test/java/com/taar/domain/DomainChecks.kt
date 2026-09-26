@@ -73,15 +73,6 @@ object DomainChecks {
         scanDownweightsFairPoints(),
         scanStrengthIsBounded(),
         scanStoreRoundTrips(),
-        roomOneReadingNeverMakesAZone(),
-        roomNearbyAnomaliesFormAZone(),
-        roomMovedReadingsTakeNoPart(),
-        roomNeedsEnoughPoints(),
-        roomActivityScaleMatchesThresholds(),
-        roomHeatStaysLocal(),
-        roomPathJoinsOnlyNearbyStrongPoints(),
-        roomCoverageCountsSurfaceNearPoints(),
-        roomStoreRoundTrips(),
     )
 
     private fun check(name: String, block: () -> String?): Result =
@@ -877,123 +868,6 @@ object DomainChecks {
             back == null -> "nothing loaded"
             back.points != pts -> "points differ: ${back.points}"
             back.epochMillis != 42L -> "time ${back.epochMillis}"
-            else -> null
-        }
-    }
-
-    // ---- room 3D scan ----
-
-    private fun room(
-        id: Int, x: Double, y: Double = 0.0, z: Double = 0.0, contrast: Double = 3.0,
-        outcome: Fusion.Outcome = Fusion.Outcome.NO_ANOMALY, quality: Fusion.Quality = Fusion.Quality.GOOD,
-    ) = RoomMap.Point(
-        id = id, position = RoomMap.Vec3(x, y, z), epochMillis = id.toLong(),
-        lineConfidence = contrast / (contrast + 9.0), fieldAmplitudeUt = 0.5, referenceFieldUt = 0.1,
-        currentA = null, arcZ = 0.0, aiProbability = 0.1f, outcome = outcome,
-        strength = Fusion.Strength.MODERATE, quality = quality, why = listOf("reason one", "reason two"),
-    )
-
-    private fun quietRoom() = (0 until 6).map { room(it, x = it * 1.0) }
-
-    fun roomOneReadingNeverMakesAZone() = check("room: one anomaly reading never makes a red zone") {
-        val pts = quietRoom() + room(10, x = 2.2, contrast = 40.0, outcome = Fusion.Outcome.POSSIBLE_ARCING)
-        val m = RoomMap.build(pts, emptyList())
-        when {
-            m.zones.isNotEmpty() -> "zone from a single reading"
-            pts.last().state != RoomMap.State.POSSIBLE_ANOMALY -> "reading not marked as a possible anomaly"
-            "single reading" !in m.message -> "message: ${m.message}"
-            else -> null
-        }
-    }
-
-    fun roomNearbyAnomaliesFormAZone() = check("room: two nearby anomaly readings form a zone, far apart do not") {
-        val near = quietRoom() + room(10, x = 2.2, outcome = Fusion.Outcome.POSSIBLE_ARCING) +
-            room(11, x = 2.5, outcome = Fusion.Outcome.ELECTRICAL_ANOMALY)
-        val far = quietRoom() + room(10, x = 0.2, outcome = Fusion.Outcome.POSSIBLE_ARCING) +
-            room(11, x = 4.8, outcome = Fusion.Outcome.POSSIBLE_ARCING)
-        val a = RoomMap.build(near, emptyList())
-        val b = RoomMap.build(far, emptyList())
-        when {
-            a.zones.size != 1 || a.zones[0].pointIds.toSet() != setOf(10, 11) -> "near: ${a.zones.map { it.pointIds }}"
-            b.zones.isNotEmpty() -> "far readings joined into a zone"
-            else -> null
-        }
-    }
-
-    fun roomMovedReadingsTakeNoPart() = check("room: readings from a moved phone take no part") {
-        val pts = quietRoom() +
-            room(10, x = 2.2, outcome = Fusion.Outcome.POSSIBLE_ARCING, quality = Fusion.Quality.POOR) +
-            room(11, x = 2.4, outcome = Fusion.Outcome.POSSIBLE_ARCING, quality = Fusion.Quality.POOR)
-        val m = RoomMap.build(pts, emptyList())
-        when {
-            m.zones.isNotEmpty() -> "moved readings formed a zone"
-            pts.last().state != RoomMap.State.DISCARDED -> "moved reading not discarded"
-            10 in m.smoothed -> "moved reading entered the heat map"
-            else -> null
-        }
-    }
-
-    fun roomNeedsEnoughPoints() = check("room: too few readings says the map is not reliable") {
-        val m = RoomMap.build(quietRoom().take(4), emptyList())
-        if (m.enough || "Not enough measurements" !in m.message) "enough=${m.enough}: ${m.message}" else null
-    }
-
-    fun roomActivityScaleMatchesThresholds() = check("room: activity is 0 at 8x, 1 at 60x, elevated from ~13x") {
-        when {
-            !near(RoomMap.activityOf(8.0), 0.0) -> "8x gave ${RoomMap.activityOf(8.0)}"
-            !near(RoomMap.activityOf(60.0), 1.0) -> "60x gave ${RoomMap.activityOf(60.0)}"
-            RoomMap.activityOf(13.5) < RoomMap.ELEVATED_AT -> "13.5x (flowing) is below elevated"
-            RoomMap.activityOf(7.0) != 0.0 -> "no-current reading has activity"
-            else -> null
-        }
-    }
-
-    fun roomHeatStaysLocal() = check("room: heat does not spread beyond a hand-span or two") {
-        val pts = listOf(room(1, x = 0.0, contrast = 60.0))
-        val (_, weightFar) = RoomMap.fieldAt(RoomMap.Vec3(2.0, 0.0, 0.0), pts)
-        val (valueNear, weightNear) = RoomMap.fieldAt(RoomMap.Vec3(0.1, 0.0, 0.0), pts)
-        when {
-            weightFar != 0.0 -> "a point 2 m away still carries weight $weightFar"
-            weightNear <= 0.0 || !near(valueNear, 1.0) -> "near value $valueNear weight $weightNear"
-            else -> null
-        }
-    }
-
-    fun roomPathJoinsOnlyNearbyStrongPoints() = check("room: the inferred path joins only nearby strong points") {
-        val pts = quietRoom() + room(10, x = 0.0, z = 1.0, contrast = 50.0) + room(11, x = 1.0, z = 1.0, contrast = 50.0) +
-            room(12, x = 5.0, z = 1.0, contrast = 50.0)
-        val m = RoomMap.build(pts, emptyList())
-        if (m.path.size != 1) "path has ${m.path.size} edges, want 1" else null
-    }
-
-    fun roomCoverageCountsSurfaceNearPoints() = check("room: coverage is the surface share near a reading") {
-        fun square(side: Double) = RoomMap.Plane("p", false, listOf(
-            RoomMap.Vec3(0.0, 0.0, 0.0), RoomMap.Vec3(side, 0.0, 0.0),
-            RoomMap.Vec3(side, 0.0, side), RoomMap.Vec3(0.0, 0.0, side)))
-        val p = listOf(room(1, x = 0.5, z = 0.5))
-        val small = RoomMap.coverageOf(listOf(square(1.0)), p) ?: -1.0
-        val big = RoomMap.coverageOf(listOf(square(4.0)), p) ?: -1.0
-        when {
-            small < 0.99 -> "1 m square around a point covered $small"
-            big <= 0.0 || big >= 0.3 -> "4 m square covered $big"
-            RoomMap.coverageOf(emptyList(), p) != null -> "coverage without surfaces"
-            else -> null
-        }
-    }
-
-    fun roomStoreRoundTrips() = check("room store round-trips a scan") {
-        val store = RoomStore(MemoryFileSystem())
-        val plane = RoomMap.Plane("wall-1", true, listOf(RoomMap.Vec3(0.0, 0.0, 0.0), RoomMap.Vec3(1.0, 0.0, 0.0),
-            RoomMap.Vec3(1.0, 2.0, 0.0)))
-        val pts = listOf(room(1, x = 0.25, y = 1.5), room(2, x = -0.75, contrast = 40.0,
-            outcome = Fusion.Outcome.POSSIBLE_ARCING).copy(aiProbability = null, referenceFieldUt = null, currentA = 4.2))
-        store.save(RoomStore.Session("r1", "Bedroom", 99L, listOf(plane), pts))
-        val back = store.list().singleOrNull()
-        when {
-            back == null -> "nothing loaded"
-            back.points != pts -> "points differ: ${back.points} vs $pts"
-            back.planes != listOf(plane) -> "planes differ"
-            back.name != "Bedroom" -> "name ${back.name}"
             else -> null
         }
     }
