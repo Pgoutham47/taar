@@ -1,11 +1,5 @@
 package com.taar.ui
 
-import android.Manifest
-import android.app.Activity
-import android.content.pm.PackageManager
-import android.opengl.GLSurfaceView
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -18,13 +12,14 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -32,18 +27,14 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -57,33 +48,25 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.input.pointer.positionChanged
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
-import androidx.core.content.ContextCompat
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
-import com.google.ar.core.TrackingFailureReason
-import com.google.ar.core.TrackingState
-import com.taar.ar.ArRoom
 import com.taar.domain.Circuit
 import com.taar.domain.Fusion
 import com.taar.domain.RoomMap
 import com.taar.domain.RoomStore
-import kotlinx.coroutines.launch
 import kotlin.math.cos
 import kotlin.math.min
 import kotlin.math.sin
 
 /**
- * Room 3D Scan (experimental). Setup, then the live AR scan, then the 3D map.
+ * Room Map (experimental). Describe the room, place each measurement by tapping
+ * where it is on a wall or the floor, then explore the 3D map.
  *
- * ARCore builds the room and pins points; Taar's own pipeline measures at them.
- * The map shows measured activity, never hidden wiring.
+ * No camera: Taar's own pipeline measures at each spot, and the technician says
+ * where the spot is. The map shows measured activity, never hidden wiring.
  */
 @Composable
 fun RoomScanScreen(
@@ -99,14 +82,24 @@ fun RoomScanScreen(
 ) {
     val room = state.room
     var scanning by rememberSaveable { mutableStateOf(false) }
+    var width by rememberSaveable { mutableStateOf("4") }
+    var depth by rememberSaveable { mutableStateOf("3") }
+    var height by rememberSaveable { mutableStateOf("2.7") }
+    val size = Triple(
+        width.toDoubleOrNull()?.coerceIn(1.0, 20.0) ?: 4.0,
+        depth.toDoubleOrNull()?.coerceIn(1.0, 20.0) ?: 3.0,
+        height.toDoubleOrNull()?.coerceIn(2.0, 6.0) ?: 2.7,
+    )
 
     when {
         room == null -> Unit
         room.map != null -> MapStage(state, room, room.map, onNewScan = { scanning = false; onNewScan() }, onBack = onBack)
-        scanning -> ScanStage(state, room, onPinned, onCancelPoint, onMeasure,
-            onFinish = { planes, refined -> onFinish(planes, refined); scanning = false },
+        scanning -> PlaceStage(state, room, size, onPinned, onCancelPoint, onMeasure,
+            onFinish = { onFinish(RoomMap.boxRoom(size.first, size.second, size.third), emptyMap()); scanning = false },
             onBack = { scanning = false; onBack() })
-        else -> SetupStage(state, circuit, onStart = { scanning = true }, onOpen = onOpen, onBack = onBack)
+        else -> SetupStage(state, circuit, width, depth, height,
+            onSize = { w, d, h -> width = w; depth = d; height = h },
+            onStart = { scanning = true }, onOpen = onOpen, onBack = onBack)
     }
 }
 
@@ -116,35 +109,45 @@ fun RoomScanScreen(
 private fun SetupStage(
     state: TaarViewModel.UiState,
     circuit: Circuit?,
+    width: String,
+    depth: String,
+    height: String,
+    onSize: (String, String, String) -> Unit,
     onStart: () -> Unit,
     onOpen: (RoomStore.Session) -> Unit,
     onBack: () -> Unit,
 ) {
-    TaarScreen(title = "Room 3D Scan", subtitle = "Experimental · one room", onBack = onBack) {
-        Text("Map Taar's measurements onto a 3D model of one room.", style = MaterialTheme.typography.bodyLarge)
+    TaarScreen(title = "Room Map", subtitle = "Experimental · one room", onBack = onBack) {
+        Text("Place Taar's measurements on a 3D model of one room.", style = MaterialTheme.typography.bodyLarge)
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Instruction(1, "Move slowly around the room with the camera up until walls and floor are outlined.")
-                Instruction(2, "Aim the crosshair at a socket or wall spot and tap Pin.")
+                Instruction(1, "Enter the room's size below. A tape measure or a good guess is fine.")
+                Instruction(2, "Pick the wall (or floor) a socket or spot is on, and tap where it is.")
                 Instruction(3, "Press the phone flat on that spot and tap Measure. Hold still for 3 seconds.")
-                Instruction(4, "Lift the phone, let tracking settle, and repeat. 6 or more points, spread around.")
+                Instruction(4, "Repeat around the room. 6 or more points, spread out.")
                 Instruction(5, "Tap Finish to see the 3D map.")
             }
         }
-        Hint("Keep the phone steady and at a similar distance from the surfaces you inspect. The magnetometer " +
-            "only senses current within a few centimetres, which is why each point is measured by touching it.")
+        Text("Room size, metres", style = MaterialTheme.typography.titleSmall)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            SizeField("Width", width, Modifier.weight(1f)) { onSize(it, depth, height) }
+            SizeField("Depth", depth, Modifier.weight(1f)) { onSize(width, it, height) }
+            SizeField("Height", height, Modifier.weight(1f)) { onSize(width, depth, it) }
+        }
+        Hint("Width runs along the north wall; depth from the north wall to the south wall. Pick any wall " +
+            "as \"north\" and stay consistent.")
         if (circuit?.baseline?.isSufficient != true) {
             ErrorCard("Record a reference first. For a room, add a circuit named after it and record its reference " +
                 "at a quiet spot with nothing running nearby; each point is compared with it.")
         } else {
             Hint("Compared with the reference of \"${circuit.label}\".")
             Button(onClick = onStart, modifier = Modifier.fillMaxWidth().height(56.dp)) {
-                Text("Start room scan", style = MaterialTheme.typography.titleMedium)
+                Text("Start room map", style = MaterialTheme.typography.titleMedium)
             }
         }
         if (state.roomHistory.isNotEmpty()) {
             HorizontalDivider()
-            Text("Saved room scans", style = MaterialTheme.typography.titleSmall)
+            Text("Saved room maps", style = MaterialTheme.typography.titleSmall)
             for (s in state.roomHistory.take(5)) {
                 Text("${time(s.epochMillis)} · ${s.name} · ${s.points.size} points  ›",
                     style = MaterialTheme.typography.bodyMedium,
@@ -155,178 +158,161 @@ private fun SetupStage(
     }
 }
 
-// ---- 2. live AR scan ----
+@Composable
+private fun SizeField(label: String, value: String, modifier: Modifier, onChange: (String) -> Unit) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = { v -> onChange(v.filter { it.isDigit() || it == '.' }.take(5)) },
+        label = { Text(label) },
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+        modifier = modifier,
+    )
+}
+
+// ---- 2. place and measure ----
 
 @Composable
-private fun ScanStage(
+private fun PlaceStage(
     state: TaarViewModel.UiState,
     room: TaarViewModel.Room,
+    size: Triple<Double, Double, Double>,
     onPinned: () -> Int,
     onCancelPoint: () -> Unit,
     onMeasure: (Int, RoomMap.Vec3) -> Unit,
-    onFinish: (List<RoomMap.Plane>, Map<Int, RoomMap.Vec3>) -> Unit,
+    onFinish: () -> Unit,
     onBack: () -> Unit,
 ) {
-    val activity = LocalContext.current as Activity
-    val ar = remember { ArRoom(activity) }
-    val snap by ar.snapshot.collectAsState()
-    val scope = rememberCoroutineScope()
-    var problem by remember { mutableStateOf<String?>(null) }
-    var ready by remember { mutableStateOf(false) }
-    var hint by remember { mutableStateOf<String?>(null) }
-    val pinnedAt = remember { mutableStateMapOf<Int, RoomMap.Vec3>() }
-    var glView by remember { mutableStateOf<GLSurfaceView?>(null) }
+    val (w, d, h) = size
+    var surface by rememberSaveable { mutableStateOf(RoomMap.Surface.NORTH) }
+    var target by remember { mutableStateOf<RoomMap.Vec3?>(null) }
+    val pending = room.pendingId
 
-    var granted by remember {
-        mutableStateOf(ContextCompat.checkSelfPermission(activity, Manifest.permission.CAMERA) ==
-            PackageManager.PERMISSION_GRANTED)
-    }
-    val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted = it }
-    LaunchedEffect(granted) {
-        if (!granted) { ask.launch(Manifest.permission.CAMERA); return@LaunchedEffect }
-        problem = ar.open() ?: ar.resume()
-        ready = problem == null
-    }
+    TaarScreen(title = "Room Map", subtitle = room.name, onBack = if (room.measuring) null else onBack) {
+        ProgressCard(room)
 
-    val lifecycle = LocalLifecycleOwner.current
-    DisposableEffect(lifecycle) {
-        val observer = LifecycleEventObserver { _, event ->
-            when (event) {
-                Lifecycle.Event.ON_PAUSE -> { glView?.onPause(); ar.pause() }
-                Lifecycle.Event.ON_RESUME -> if (ready) { ar.resume()?.let { problem = it }; glView?.onResume() }
-                else -> Unit
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            for (s in RoomMap.Surface.values()) {
+                FilterChip(
+                    selected = surface == s,
+                    onClick = { if (pending == null) { surface = s; target = null } },
+                    label = { Text(s.label.substringBefore(" wall")) },
+                )
             }
         }
-        lifecycle.lifecycle.addObserver(observer)
-        onDispose {
-            lifecycle.lifecycle.removeObserver(observer)
-            glView?.onPause()
-            ar.pause()
-            ar.close()
-        }
-    }
-
-    Column(Modifier.fillMaxSize().safeDrawingPadding()) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = onBack, enabled = !room.measuring) { Text("← Back") }
-            Text("Room 3D Scan", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        val (fw, fh) = RoomMap.faceSize(surface, w, d, h)
+        Text(
+            if (surface == RoomMap.Surface.FLOOR) "Floor from above · %.1f × %.1f m · north wall at the top".format(fw, fh)
+            else "${surface.label}, facing it from inside · %.1f m wide × %.1f m high".format(fw, fh),
+            style = MaterialTheme.typography.labelMedium, color = TaarPalette.Grey,
+        )
+        FacePicker(surface, room.points, target, w, d, fw, fh, enabled = pending == null && !room.measuring) {
+            target = it
         }
 
-        Box(Modifier.fillMaxWidth().weight(1f).background(Color.Black)) {
-            when {
-                !granted -> Hint("Camera permission is needed for Room 3D Scan.", color = TaarPalette.Amber)
-                problem != null -> ErrorCard(problem!!)
-                ready -> {
-                    AndroidView(
-                        factory = { ctx ->
-                            GLSurfaceView(ctx).apply {
-                                preserveEGLContextOnPause = true
-                                setEGLContextClientVersion(2)
-                                setEGLConfigChooser(8, 8, 8, 8, 16, 0)
-                                setRenderer(ar)
-                                renderMode = GLSurfaceView.RENDERMODE_CONTINUOUSLY
-                            }.also { glView = it }
-                        },
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                    ArOverlay(snap, room, pinnedAt)
-                }
-            }
-            ProgressCard(snap, room, pinnedAt, Modifier.align(Alignment.TopCenter).padding(8.dp))
-        }
-
-        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            val pending = room.pendingId
-            when {
-                room.measuring -> Text("Measuring… hold the phone still on the spot (3 s)",
-                    style = MaterialTheme.typography.titleMedium, color = TaarPalette.Yellow)
-                pending != null -> {
-                    Text("Press the phone flat on the marked spot, then tap Measure.",
-                        style = MaterialTheme.typography.titleMedium)
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(
-                            onClick = {
-                                val at = pinnedAt[pending] ?: return@Button
-                                onMeasure(pending, at)
-                            },
-                            modifier = Modifier.weight(1f).height(52.dp),
-                        ) { Text("Measure", style = MaterialTheme.typography.titleMedium) }
-                        OutlinedButton(onClick = { ar.unpin(pending); pinnedAt.remove(pending); onCancelPoint() },
-                            modifier = Modifier.height(52.dp)) { Text("Cancel") }
+        when {
+            room.measuring -> Text("Measuring… hold the phone still on the spot (3 s)",
+                style = MaterialTheme.typography.titleMedium, color = TaarPalette.Yellow)
+            pending != null -> {
+                Text("Press the phone flat on that spot, then tap Measure.", style = MaterialTheme.typography.titleMedium)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = { target?.let { onMeasure(pending, it) }; target = null },
+                        modifier = Modifier.weight(1f).height(52.dp),
+                    ) { Text("Measure", style = MaterialTheme.typography.titleMedium) }
+                    OutlinedButton(onClick = { onCancelPoint(); target = null }, modifier = Modifier.height(52.dp)) {
+                        Text("Cancel")
                     }
                 }
-                else -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(
-                        onClick = {
-                            scope.launch {
-                                val id = onPinned()
-                                val at = ar.markCentre(id)
-                                if (at == null) {
-                                    onCancelPoint()
-                                    hint = "No surface under the crosshair. Aim at an outlined wall or floor area and try again."
-                                } else {
-                                    pinnedAt[id] = at
-                                    hint = null
-                                }
-                            }
-                        },
-                        enabled = ready && snap.tracking == TrackingState.TRACKING,
-                        modifier = Modifier.weight(1f).height(52.dp),
-                    ) { Text("Pin spot at crosshair", style = MaterialTheme.typography.titleMedium) }
-                    OutlinedButton(
-                        onClick = { onFinish(snap.planes, snap.anchors) },
-                        enabled = room.points.isNotEmpty(),
-                        modifier = Modifier.height(52.dp),
-                    ) { Text("Finish") }
+            }
+            else -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = { onPinned() },
+                    enabled = target != null,
+                    modifier = Modifier.weight(1f).height(52.dp),
+                ) { Text(if (target == null) "Tap a spot above" else "Use this spot", style = MaterialTheme.typography.titleMedium) }
+                OutlinedButton(onClick = onFinish, enabled = room.points.isNotEmpty(), modifier = Modifier.height(52.dp)) {
+                    Text("Finish")
                 }
             }
-            (hint ?: room.lastMessage)?.let { Hint(it) }
+        }
+        room.lastMessage?.let { Hint(it) }
+    }
+}
+
+/** One wall (or the floor) as a rectangle to tap on, with the points already on it. */
+@Composable
+private fun FacePicker(
+    surface: RoomMap.Surface,
+    points: List<RoomMap.Point>,
+    target: RoomMap.Vec3?,
+    w: Double,
+    d: Double,
+    faceW: Double,
+    faceH: Double,
+    enabled: Boolean,
+    onPick: (RoomMap.Vec3) -> Unit,
+) {
+    val floor = surface == RoomMap.Surface.FLOOR
+    Canvas(
+        Modifier.fillMaxWidth().aspectRatio((faceW / faceH).toFloat().coerceIn(0.6f, 3f))
+            .background(Color(0xFF12161D))
+            .pointerInput(surface, faceW, faceH, enabled) {
+                if (!enabled) return@pointerInput
+                detectTapGestures { tap ->
+                    val across = (tap.x / size.width * faceW).coerceIn(0.0, faceW)
+                    // Walls: up from the floor, so flip the screen's y. Floor: down from the north wall.
+                    val up = if (floor) (tap.y / size.height * faceH).coerceIn(0.0, faceH)
+                    else ((1 - tap.y / size.height) * faceH).coerceIn(0.0, faceH)
+                    onPick(RoomMap.place(surface, across, up, w, d))
+                }
+            },
+    ) {
+        fun toScreen(a: Double, u: Double) = Offset(
+            (a / faceW * size.width).toFloat(),
+            (if (floor) u / faceH * size.height else (1 - u / faceH) * size.height).toFloat(),
+        )
+        // Half-metre grid, so a spot can be placed by eye.
+        var g = 0.5
+        while (g < faceW) { val x = (g / faceW * size.width).toFloat(); drawLine(Color(0xFF2A313C), Offset(x, 0f), Offset(x, size.height), 1f); g += 0.5 }
+        g = 0.5
+        while (g < faceH) { val y = (g / faceH * size.height).toFloat(); drawLine(Color(0xFF2A313C), Offset(0f, y), Offset(size.width, y), 1f); g += 0.5 }
+        drawRect(TaarPalette.Blue, style = Stroke(width = 3f))
+        for (p in points) {
+            val (a, u) = RoomMap.onFace(surface, p.position, w, d) ?: continue
+            drawCircle(colourOf(p.state), 14f, toScreen(a, u))
+        }
+        target?.let { t ->
+            RoomMap.onFace(surface, t, w, d)?.let { (a, u) ->
+                val at = toScreen(a, u)
+                drawCircle(Color.White, 18f, at, style = Stroke(width = 4f))
+                drawLine(Color.White, at - Offset(26f, 0f), at + Offset(26f, 0f), 2f)
+                drawLine(Color.White, at - Offset(0f, 26f), at + Offset(0f, 26f), 2f)
+            }
         }
     }
 }
 
 @Composable
-private fun ProgressCard(
-    snap: ArRoom.Snapshot,
-    room: TaarViewModel.Room,
-    pinnedAt: Map<Int, RoomMap.Vec3>,
-    modifier: Modifier,
-) {
-    val accepted = room.points.filter { it.accepted }
-        .map { p -> snap.anchors[p.id]?.let { p.copy(position = it) } ?: p }
-    val coverage = RoomMap.coverageOf(snap.planes, accepted)
-    val tracking = snap.tracking == TrackingState.TRACKING
-    Card(modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color(0xCC0D0F13))) {
+private fun ProgressCard(room: TaarViewModel.Room) {
+    val accepted = room.points.count { it.accepted }
+    Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text("ROOM SCAN", style = MaterialTheme.typography.labelLarge, color = TaarPalette.Yellow)
-            val walls = snap.planes.count { it.vertical }
-            Line2("Spatial map", if (snap.planes.isEmpty()) "searching…" else
-                "✓ ${snap.planes.size - walls} floor · $walls wall")
-            Line2("Camera", when {
-                snap.error != null -> "✕ error"
-                !snap.surfaceReady -> "✕ no drawing surface yet"
-                snap.frames == 0L -> "✕ no frames yet"
-                else -> "✓ ${snap.frames} frames"
-            })
-            snap.error?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = TaarPalette.Red) }
-            Line2("Tracking", if (tracking) "✓" else "✕ ${reasonOf(snap.failure)}")
-            Line2("Measurements", "${room.points.size}  (${accepted.size} good · ${room.points.size - accepted.size} rejected)")
-            if (coverage != null) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Coverage", style = MaterialTheme.typography.bodySmall, modifier = Modifier.width(96.dp))
-                    Box(Modifier.weight(1f).height(8.dp).background(TaarPalette.Grey.copy(alpha = 0.3f))) {
-                        Box(Modifier.fillMaxWidth(coverage.toFloat().coerceIn(0.01f, 1f)).height(8.dp)
-                            .background(TaarPalette.Green))
-                    }
-                    Text("${(coverage * 100).toInt()}%", style = MaterialTheme.typography.bodySmall)
+            Text("ROOM MAP", style = MaterialTheme.typography.labelLarge, color = TaarPalette.Yellow)
+            Line2("Measurements", "${room.points.size}  (${accepted} good · ${room.points.size - accepted} rejected)")
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Toward a map", style = MaterialTheme.typography.bodySmall, modifier = Modifier.width(96.dp))
+                Box(Modifier.weight(1f).height(8.dp).background(TaarPalette.Grey.copy(alpha = 0.3f))) {
+                    Box(Modifier.fillMaxWidth((accepted.toFloat() / RoomMap.MIN_POINTS).coerceIn(0.01f, 1f)).height(8.dp)
+                        .background(TaarPalette.Green))
                 }
+                Text("$accepted/${RoomMap.MIN_POINTS}", style = MaterialTheme.typography.bodySmall)
             }
             Text(
                 when {
                     room.measuring -> "Collecting measurement…"
-                    room.pendingId != null -> "Spot pinned · waiting for Measure"
-                    !tracking -> "Move the phone slowly to regain tracking"
-                    accepted.size < RoomMap.MIN_POINTS -> "Collecting measurements… ${RoomMap.MIN_POINTS - accepted.size} more for a map"
+                    room.pendingId != null -> "Spot chosen · waiting for Measure"
+                    accepted < RoomMap.MIN_POINTS -> "Collecting measurements… ${RoomMap.MIN_POINTS - accepted} more for a map"
                     else -> "Enough for a map · add more or tap Finish"
                 },
                 style = MaterialTheme.typography.labelMedium, color = TaarPalette.Grey,
@@ -340,51 +326,6 @@ private fun Line2(label: String, value: String) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         Text(label, style = MaterialTheme.typography.bodySmall)
         Text(value, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
-    }
-}
-
-private fun reasonOf(r: TrackingFailureReason?) = when (r) {
-    TrackingFailureReason.EXCESSIVE_MOTION -> "moving too fast"
-    TrackingFailureReason.INSUFFICIENT_LIGHT -> "too dark"
-    TrackingFailureReason.INSUFFICIENT_FEATURES -> "point at a textured area"
-    TrackingFailureReason.CAMERA_UNAVAILABLE -> "camera unavailable"
-    else -> "starting…"
-}
-
-/** Surfaces and pinned points drawn over the camera image. */
-@Composable
-private fun ArOverlay(snap: ArRoom.Snapshot, room: TaarViewModel.Room, pinnedAt: Map<Int, RoomMap.Vec3>) {
-    val vp = snap.viewProjection
-    Canvas(Modifier.fillMaxSize()) {
-        fun project(v: RoomMap.Vec3): Offset? {
-            val m = vp ?: return null
-            val x = m[0] * v.x + m[4] * v.y + m[8] * v.z + m[12]
-            val y = m[1] * v.x + m[5] * v.y + m[9] * v.z + m[13]
-            val w = m[3] * v.x + m[7] * v.y + m[11] * v.z + m[15]
-            if (w <= 0.01) return null
-            return Offset(((x / w + 1) / 2 * size.width).toFloat(), ((1 - y / w) / 2 * size.height).toFloat())
-        }
-        for (plane in snap.planes) {
-            val pts = plane.polygon.mapNotNull(::project)
-            if (pts.size < 3) continue
-            val path = Path().apply { moveTo(pts[0].x, pts[0].y); pts.drop(1).forEach { lineTo(it.x, it.y) }; close() }
-            val c = if (plane.vertical) TaarPalette.Blue else TaarPalette.Grey
-            drawPath(path, c.copy(alpha = 0.18f))
-            drawPath(path, c.copy(alpha = 0.7f), style = Stroke(width = 3f))
-        }
-        for (p in room.points) {
-            val at = project(snap.anchors[p.id] ?: p.position) ?: continue
-            drawCircle(colourOf(p.state), 16f, at)
-            drawCircle(Color.White, 16f, at, style = Stroke(width = 3f))
-        }
-        room.pendingId?.let { id ->
-            (snap.anchors[id] ?: pinnedAt[id])?.let(::project)?.let {
-                drawCircle(Color.White, 22f, it, style = Stroke(width = 5f))
-            }
-        }
-        val c = Offset(size.width / 2, size.height / 2)
-        drawLine(Color.White, c - Offset(24f, 0f), c + Offset(24f, 0f), 3f)
-        drawLine(Color.White, c - Offset(0f, 24f), c + Offset(0f, 24f), 3f)
     }
 }
 
@@ -426,7 +367,7 @@ private fun MapStage(
                     })
                 val good = map.points.count { it.accepted }
                 Line2("Measurements", "${map.points.size} (${good} good · ${map.points.size - good} rejected)")
-                map.coverage?.let { Line2("Surface coverage", "${(it * 100).toInt()}%") }
+                map.coverage?.let { Line2("Wall & floor area near a reading", "${(it * 100).toInt()}%") }
                 Line2("Surfaces", "${map.planes.size}")
             }
         }

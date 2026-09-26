@@ -141,7 +141,7 @@ fun HomeScreen(
         ) { Text("See What Taar Sees · live physics", style = MaterialTheme.typography.titleMedium) }
 
         OutlinedButton(onClick = { onGo(MainActivity.Screen.ROOM) }, modifier = Modifier.fillMaxWidth()) {
-            Text("Room 3D Scan · experimental")
+            Text("Room Map (3D) · experimental")
         }
 
         if (hasReference) {
