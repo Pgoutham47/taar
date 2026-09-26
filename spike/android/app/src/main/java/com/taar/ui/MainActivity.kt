@@ -8,10 +8,23 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Surface
-import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -19,7 +32,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.core.content.ContextCompat
 import com.taar.data.AndroidFileSystem
 import com.taar.domain.ScanStore
@@ -34,9 +46,10 @@ import com.taar.ml.TaarAssistant
 /**
  * Wiring and navigation.
  *
- * Every screen is reached from Home, and Back always returns there. The flow is
- * linear on purpose -- phone check, circuit, reference, measure -- and Home shows
- * which of those are done, so there is never a question of what to press next.
+ * Four tabs -- Home, Tools, Ask, History -- and every task screen opens full-screen
+ * from them, with Back returning to the tabs. The measuring flow is linear on
+ * purpose -- phone check, circuit, reference, measure -- and Home shows which of
+ * those are done, so there is never a question of what to press next.
  *
  * Dependencies are constructed by hand. The graph is four objects deep and an
  * injection framework would add a build step, a vocabulary and a failure mode for
@@ -44,7 +57,9 @@ import com.taar.ml.TaarAssistant
  */
 class MainActivity : ComponentActivity() {
 
-    enum class Screen { HOME, PHONE_CHECK, CIRCUITS, REFERENCE, MEASURE, CABLE_SCAN, LIVE, CALIBRATE, HISTORY }
+    enum class Screen { HOME, PHONE_CHECK, CIRCUITS, REFERENCE, MEASURE, CABLE_SCAN, LIVE, CALIBRATE }
+
+    enum class Tab(val label: String) { HOME("Home"), TOOLS("Tools"), ASK("Ask AI"), HISTORY("History") }
 
     private lateinit var viewModel: TaarViewModel
     private lateinit var mag: MagCapture
@@ -77,9 +92,10 @@ class MainActivity : ComponentActivity() {
         if (!audioGranted) requestAudio.launch(Manifest.permission.RECORD_AUDIO)
 
         setContent {
-            MaterialTheme(colorScheme = TaarColors) {
-                Surface(modifier = Modifier.fillMaxSize()) {
+            TaarTheme {
+                Surface(modifier = Modifier.fillMaxSize(), color = TaarPalette.Background) {
                     var screen by remember { mutableStateOf(Screen.HOME) }
+                    var tab by rememberSaveable { mutableStateOf(Tab.HOME) }
                     val state by viewModel.state.collectAsState()
                     val home = { screen = Screen.HOME }
 
@@ -90,13 +106,36 @@ class MainActivity : ComponentActivity() {
                         if (screen == Screen.LIVE) { viewModel.pauseLive(); home() }
                         else if (!state.busy) home()
                     }
+                    // On a tab other than Home, back returns to Home before leaving the app.
+                    BackHandler(enabled = screen == Screen.HOME && tab != Tab.HOME) { tab = Tab.HOME }
 
                     when (screen) {
-                        Screen.HOME -> HomeScreen(
-                            state = state,
-                            circuit = viewModel.selectedCircuit,
-                            onGo = { screen = it },
-                        )
+                        Screen.HOME -> Tabs(tab, onTab = { tab = it }) {
+                            when (tab) {
+                                Tab.HOME -> HomeScreen(
+                                    state = state,
+                                    circuit = viewModel.selectedCircuit,
+                                    onGo = { screen = it },
+                                )
+                                Tab.TOOLS -> ToolsScreen(onGo = { screen = it })
+                                Tab.ASK -> AskScreen(
+                                    state = state,
+                                    onAsk = { viewModel.askGeneral(it) },
+                                    onImportModel = { viewModel.importAssistantModel(it) },
+                                    onClear = { viewModel.clearChat() },
+                                )
+                                Tab.HISTORY -> {
+                                    LaunchedEffect(Unit) { viewModel.loadHistory() }
+                                    HistoryScreen(
+                                        boardName = state.installation?.name ?: "",
+                                        readings = state.history,
+                                        circuitLabels = state.installation?.circuits
+                                            ?.associate { it.id to it.label } ?: emptyMap(),
+                                        onBack = null,
+                                    )
+                                }
+                            }
+                        }
 
                         Screen.PHONE_CHECK -> PreCheckHost(
                             mag = mag,
@@ -181,16 +220,6 @@ class MainActivity : ComponentActivity() {
                             )
                         }
 
-                        Screen.HISTORY -> {
-                            LaunchedEffect(Unit) { viewModel.loadHistory() }
-                            HistoryScreen(
-                                boardName = state.installation?.name ?: "",
-                                readings = state.history,
-                                circuitLabels = state.installation?.circuits
-                                    ?.associate { it.id to it.label } ?: emptyMap(),
-                                onBack = home,
-                            )
-                        }
                     }
                 }
             }
@@ -204,13 +233,40 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private val TaarColors = darkColorScheme(
-    primary = Color(0xFFFFD54A),
-    onPrimary = Color(0xFF1A1400),
-    background = Color(0xFF0D0F13),
-    surface = Color(0xFF0D0F13),
-    surfaceVariant = Color(0xFF1B2029),
-    onBackground = Color(0xFFEEF1F6),
-    onSurface = Color(0xFFEEF1F6),
-    onSurfaceVariant = Color(0xFFEEF1F6),
-)
+/** The tab shell: the current tab's screen above a bottom bar. */
+@androidx.compose.runtime.Composable
+private fun Tabs(
+    current: MainActivity.Tab,
+    onTab: (MainActivity.Tab) -> Unit,
+    content: @androidx.compose.runtime.Composable () -> Unit,
+) {
+    Column(Modifier.fillMaxSize()) {
+        Box(Modifier.weight(1f).fillMaxWidth()) { content() }
+        HorizontalDivider(color = TaarPalette.Outline)
+        NavigationBar(containerColor = TaarPalette.Surface, tonalElevation = androidx.compose.ui.unit.Dp(0f)) {
+            for (t in MainActivity.Tab.entries) {
+                NavigationBarItem(
+                    selected = t == current,
+                    onClick = { onTab(t) },
+                    icon = {
+                        Icon(
+                            when (t) {
+                                MainActivity.Tab.HOME -> Icons.Filled.Home
+                                MainActivity.Tab.TOOLS -> Icons.Filled.Build
+                                MainActivity.Tab.ASK -> Icons.Filled.Star
+                                MainActivity.Tab.HISTORY -> Icons.AutoMirrored.Filled.List
+                            },
+                            contentDescription = null,
+                        )
+                    },
+                    label = { Text(t.label) },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = TaarPalette.Yellow, selectedTextColor = TaarPalette.Yellow,
+                        indicatorColor = TaarPalette.Yellow.copy(alpha = 0.14f),
+                        unselectedIconColor = TaarPalette.Faint, unselectedTextColor = TaarPalette.Faint,
+                    ),
+                )
+            }
+        }
+    }
+}

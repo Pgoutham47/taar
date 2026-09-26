@@ -62,9 +62,9 @@ fun SpectrogramView(result: Spectrogram.Result, modifier: Modifier = Modifier) {
 private fun heat(v: Double): Color {
     val t = v.coerceIn(0.0, 1.0).toFloat()
     return when {
-        t < 0.5f -> lerp(Color(0xFF0D0F13), Color(0xFF3B4A7A), t / 0.5f)
-        t < 0.8f -> lerp(Color(0xFF3B4A7A), Color(0xFFFFD54A), (t - 0.5f) / 0.3f)
-        else -> lerp(Color(0xFFFFD54A), Color(0xFFFFFFFF), (t - 0.8f) / 0.2f)
+        t < 0.5f -> lerp(Color(0xFF0B0E14), Color(0xFF3B4A7A), t / 0.5f)
+        t < 0.8f -> lerp(Color(0xFF3B4A7A), Color(0xFFFFC940), (t - 0.5f) / 0.3f)
+        else -> lerp(Color(0xFFFFC940), Color(0xFFFFFFFF), (t - 0.8f) / 0.2f)
     }
 }
 

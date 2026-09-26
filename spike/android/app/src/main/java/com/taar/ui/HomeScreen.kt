@@ -2,30 +2,35 @@ package com.taar.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Phone
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import com.taar.domain.Circuit
 import com.taar.domain.LineState
-import com.taar.ml.ArcModel
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 /**
- * Home: which circuit, which setup steps are done, and one big button for the next
- * thing to do. The old screen offered six equal buttons and left the order to guesswork.
+ * Home: which cable, what is left to set up, and one button for the next thing.
+ *
+ * Setup is three steps in a fixed order. Until they are done the checklist leads
+ * and the button says which step is next; once they are, the checklist folds into
+ * a single line and the button says Measure.
  */
 @Composable
 fun HomeScreen(
@@ -38,121 +43,147 @@ fun HomeScreen(
     val hasCircuit = circuit != null
     val hasReference = circuit?.baseline?.isSufficient == true
     val calibrated = circuit?.utPerAmp != null
+    val done = listOf(phoneOk, hasCircuit, hasReference).count { it }
 
-    TaarScreen(
-        title = "Taar",
-        subtitle = "Checks whether current is flowing in a cable, using the phone's magnetic sensor.",
-    ) {
-        Card(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Hint("Now measuring")
-                Text(
-                    circuit?.let { "${state.installation?.name ?: ""} › ${it.label}" } ?: "No circuit chosen",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                circuit?.breakerRatingA?.let { Hint("Breaker %.0f A".format(it)) }
+    TaarScreen(title = "Taar", subtitle = "Electrical triage from your phone · తార", bottomInset = false) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            StatusPill("Offline", Tone.SUCCESS)
+            StatusPill(
+                if (state.aiSelfCheck?.passed == true) "Arc AI on" else "Arc AI off",
+                if (state.aiSelfCheck?.passed == true) Tone.SUCCESS else Tone.NEUTRAL,
+            )
+            StatusPill(
+                if (state.assistant.installed) "Assistant on" else "Assistant off",
+                if (state.assistant.installed) Tone.INFO else Tone.NEUTRAL,
+            )
+        }
+
+        TaarCard(onClick = { onGo(MainActivity.Screen.CIRCUITS) }) {
+            SectionLabel("Now measuring")
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(circuit?.label ?: "No circuit chosen", style = MaterialTheme.typography.titleLarge)
+                    Text(
+                        listOfNotNull(
+                            state.installation?.name,
+                            circuit?.breakerRatingA?.let { "%.0f A breaker".format(it) },
+                            if (calibrated) "amps calibrated" else null,
+                        ).joinToString(" · ").ifEmpty { "Choose the cable you are measuring" },
+                        style = MaterialTheme.typography.bodySmall, color = TaarPalette.Grey,
+                    )
+                }
+                Text("Change", style = MaterialTheme.typography.labelLarge, color = TaarPalette.Yellow)
             }
         }
 
-        Card(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("Setup", style = MaterialTheme.typography.titleMedium)
-
+        if (done < 3) {
+            TaarCard {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Get ready", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                    Text("$done of 3", style = MaterialTheme.typography.labelLarge, color = TaarPalette.Grey)
+                }
+                LinearProgressIndicator(
+                    progress = { done / 3f },
+                    modifier = Modifier.fillMaxWidth().height(6.dp).clip(MaterialTheme.shapes.extraSmall),
+                    color = TaarPalette.Yellow, trackColor = TaarPalette.SurfaceHigh,
+                    gapSize = 0.dp, drawStopIndicator = {},
+                )
                 StepRow(
-                    number = 1,
-                    title = "Phone check",
-                    state = when {
-                        phoneOk -> StepState.DONE
-                        phoneFailed -> StepState.PROBLEM
-                        else -> StepState.TODO
-                    },
+                    number = 1, title = "Phone check",
+                    state = when { phoneOk -> StepState.DONE; phoneFailed -> StepState.PROBLEM; else -> StepState.TODO },
                     detail = state.phoneCheck?.let {
-                        if (it.passed) "Sensor working · %.0f Hz · %s".format(it.rateHz, time(it.atMillis))
-                        else "Last check failed · try again"
-                    } ?: "Not done yet · takes 3 seconds",
+                        if (it.passed) "Sensor at %.0f Hz · ${time(it.atMillis)}".format(it.rateHz) else "Last check failed"
+                    } ?: "3 seconds, phone flat on a table",
                     actionLabel = if (state.phoneCheck == null) "Start" else "Redo",
                     onAction = { onGo(MainActivity.Screen.PHONE_CHECK) },
                 )
-                HorizontalDivider()
                 StepRow(
-                    number = 2,
-                    title = "Circuit",
+                    number = 2, title = "Choose the circuit",
                     state = if (hasCircuit) StepState.DONE else StepState.TODO,
-                    detail = circuit?.let { "${it.label} on ${state.installation?.name}" }
-                        ?: "Choose which cable you are measuring",
+                    detail = circuit?.label ?: "Which cable you are measuring",
                     actionLabel = if (hasCircuit) "Change" else "Choose",
                     onAction = { onGo(MainActivity.Screen.CIRCUITS) },
                 )
-                HorizontalDivider()
                 StepRow(
-                    number = 3,
-                    title = "Reference",
+                    number = 3, title = "Record its normal",
                     state = if (hasReference) StepState.DONE else StepState.TODO,
-                    detail = circuit?.baseline?.takeIf { it.isSufficient }?.let {
-                        "Recorded ${time(it.recordedAtMillis)} · " + when (LineState.of(it.medianLineConfidence)) {
-                            LineState.NONE -> "no current was flowing"
-                            LineState.UNCLEAR -> "signal was unclear"
-                            LineState.FLOWING -> "current was flowing"
-                        }
-                    } ?: "What 'normal' looks like for this cable",
-                    actionLabel = when {
-                        !hasCircuit -> null
-                        hasReference -> "Redo"
-                        else -> "Record"
-                    },
+                    detail = circuit?.baseline?.takeIf { it.isSufficient }?.let { "Recorded ${time(it.recordedAtMillis)}" }
+                        ?: "3 captures of the wire in its normal state",
+                    actionLabel = when { !hasCircuit -> null; hasReference -> "Redo"; else -> "Record" },
                     onAction = { onGo(MainActivity.Screen.REFERENCE) },
                 )
-                HorizontalDivider()
-                StepRow(
-                    number = 4,
-                    title = "Amps (optional)",
-                    state = if (calibrated) StepState.DONE else StepState.OPTIONAL,
-                    detail = if (calibrated) "Calibrated · readings show amps"
-                    else "Not calibrated · readings won't show amps",
-                    actionLabel = if (hasReference) (if (calibrated) "Redo" else "Calibrate") else null,
-                    onAction = { onGo(MainActivity.Screen.CALIBRATE) },
+            }
+        } else {
+            Banner(
+                "Press the phone flat on the cable and tap Measure. Keep it still for 3 seconds.",
+                Tone.SUCCESS, title = "Ready to measure",
+            )
+        }
+
+        val (label, target) = when {
+            state.phoneCheck == null || phoneFailed -> "Start phone check" to MainActivity.Screen.PHONE_CHECK
+            !hasCircuit -> "Choose a circuit" to MainActivity.Screen.CIRCUITS
+            !hasReference -> "Record the reference" to MainActivity.Screen.REFERENCE
+            else -> "Measure" to MainActivity.Screen.MEASURE
+        }
+        PrimaryButton(label, onClick = { onGo(target) })
+
+        if (done == 3) {
+            TaarCard {
+                ListRow(
+                    "Reference", circuit?.baseline?.let {
+                        "Recorded ${time(it.recordedAtMillis)} · " + when (LineState.of(it.medianLineConfidence)) {
+                            LineState.NONE -> "no current"
+                            LineState.UNCLEAR -> "unclear signal"
+                            LineState.FLOWING -> "current flowing"
+                        }
+                    }, icon = Icons.Filled.Settings, iconTint = TaarPalette.Green,
+                    onClick = { onGo(MainActivity.Screen.REFERENCE) },
+                )
+                Rule()
+                ListRow(
+                    "Amps", if (calibrated) "Calibrated · readings show amperes" else "Optional · calibrate to see amperes",
+                    icon = Icons.Filled.Build, iconTint = if (calibrated) TaarPalette.Green else TaarPalette.Grey,
+                    onClick = { onGo(MainActivity.Screen.CALIBRATE) },
                 )
             }
         }
 
-        AiStatus(state.aiSelfCheck)
+        Hint("Taar is a triage aid. It senses current, not voltage, and does not replace a licensed " +
+            "electrician, a calibrated meter or a voltage tester.")
+    }
+}
 
-        // One primary action: the next unfinished step, or Measure once ready.
-        val (label, target) = when {
-            state.phoneCheck == null || phoneFailed -> "Next: phone check" to MainActivity.Screen.PHONE_CHECK
-            !hasCircuit -> "Next: choose a circuit" to MainActivity.Screen.CIRCUITS
-            !hasReference -> "Next: record reference" to MainActivity.Screen.REFERENCE
-            else -> "Measure" to MainActivity.Screen.MEASURE
+/** Deeper checks and setup, one tap away from any tab. */
+@Composable
+fun ToolsScreen(onGo: (MainActivity.Screen) -> Unit) {
+    TaarScreen(title = "Tools", subtitle = "Deeper checks and setup", bottomInset = false) {
+        SectionLabel("Inspect")
+        TaarCard {
+            ListRow("Cable Scan", "Find where along a cable the sparking signal is strongest",
+                icon = Icons.Filled.Search, onClick = { onGo(MainActivity.Screen.CABLE_SCAN) })
+            Rule()
+            ListRow("See What Taar Sees", "Live view from sensor signal to result",
+                icon = Icons.Filled.PlayArrow, iconTint = TaarPalette.Blue, onClick = { onGo(MainActivity.Screen.LIVE) })
         }
-        Button(
-            onClick = { onGo(target) },
-            modifier = Modifier.fillMaxWidth().height(56.dp),
-        ) { Text(label, style = MaterialTheme.typography.titleMedium) }
-
-        if (target == MainActivity.Screen.MEASURE) {
-            Hint("Put the phone flat on the cable, tap Measure, and keep still for 3 seconds.")
+        SectionLabel("Setup")
+        TaarCard {
+            ListRow("Circuits and boards", "Add, rename and choose what you measure",
+                icon = Icons.Filled.Settings, iconTint = TaarPalette.Grey, onClick = { onGo(MainActivity.Screen.CIRCUITS) })
+            Rule()
+            ListRow("Phone check", "Sensor speed, background noise, microphone",
+                icon = Icons.Filled.Phone, iconTint = TaarPalette.Grey, onClick = { onGo(MainActivity.Screen.PHONE_CHECK) })
+            Rule()
+            ListRow("Calibrate amps", "Use an appliance of known power to show amperes",
+                icon = Icons.Filled.Build, iconTint = TaarPalette.Grey, onClick = { onGo(MainActivity.Screen.CALIBRATE) })
         }
-
-        Button(
-            onClick = { onGo(MainActivity.Screen.LIVE) },
-            modifier = Modifier.fillMaxWidth().height(52.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = TaarPalette.Blue),
-        ) { Text("See What Taar Sees · live physics", style = MaterialTheme.typography.titleMedium) }
-
-        if (hasReference) {
-            OutlinedButton(onClick = { onGo(MainActivity.Screen.CABLE_SCAN) }, modifier = Modifier.fillMaxWidth()) {
-                Text("Cable Scan · where along the cable?")
-            }
+        SectionLabel("About")
+        TaarCard {
+            Metric("Version", "0.1")
+            Metric("Arc model", "TFLite · 16.6 KB")
+            Metric("Assistant", "Qwen2.5 · 0.5B · on device")
+            Metric("Network", "none · offline")
         }
-        OutlinedButton(onClick = { onGo(MainActivity.Screen.HISTORY) }, modifier = Modifier.fillMaxWidth()) {
-            Text("History")
-        }
-
-        Hint(
-            "Taar is a triage aid. It does not replace a licensed electrician, a calibrated " +
-                "clamp meter or a statutory inspection.",
-        )
     }
 }
 
@@ -161,17 +192,4 @@ fun time(millis: Long): String {
     val day = SimpleDateFormat("yyyyMMdd", Locale.getDefault())
     val today = day.format(Date()) == day.format(Date(millis))
     return SimpleDateFormat(if (today) "HH:mm" else "d MMM HH:mm", Locale.getDefault()).format(Date(millis))
-}
-
-/** Whether the on-device model loaded and reproduces its training outputs on this phone. */
-@Composable
-private fun AiStatus(check: ArcModel.SelfCheck?) {
-    val (text, colour) = when {
-        check == null -> "On-device AI: not available on this phone · sparking check uses the rule alone" to
-            TaarPalette.Grey
-        check.passed -> "✓ On-device AI ready · TFLite model self-check passed (${check.rows}/${check.rows})" to
-            TaarPalette.Green
-        else -> "✕ On-device AI self-check failed · its opinion is not shown reliably" to TaarPalette.Red
-    }
-    Hint(text, color = colour)
 }

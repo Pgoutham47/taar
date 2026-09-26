@@ -9,6 +9,7 @@ import com.taar.domain.CentroidClassifier
 import com.taar.domain.CableScan
 import com.taar.domain.AssistantPrompt
 import com.taar.domain.Features
+import com.taar.domain.ProductKnowledge
 import com.taar.domain.Fusion
 import com.taar.domain.LabelledSample
 import com.taar.domain.Prediction
@@ -84,6 +85,15 @@ class TaarViewModel(
         val error: String? = null,
     )
 
+    /** One message in the Ask tab. [sources] are the notes an answer was written from. */
+    data class ChatMessage(
+        val fromUser: Boolean,
+        val text: String,
+        val sources: List<String> = emptyList(),
+        val concerns: List<String> = emptyList(),
+        val error: String? = null,
+    )
+
     /** A Cable Scan in progress or just finished. */
     data class Scan(
         val circuitLabel: String,
@@ -149,6 +159,7 @@ class TaarViewModel(
         val scanHistory: List<ScanStore.Session> = emptyList(),
         val live: Live = Live(),
         val assistant: Assistant = Assistant(),
+        val chat: List<ChatMessage> = emptyList(),
     ) {
         val busy: Boolean get() = capture != null || scan?.running == true || live.running
     }
@@ -493,6 +504,39 @@ class TaarViewModel(
                     concerns = AssistantPrompt.concerns(it.assistant.answer)))
             }
         }
+    }
+
+    /**
+     * The Ask tab: a question about the app, answered from the notes that match it.
+     * One question at a time, sharing the model with the result panel.
+     */
+    fun askGeneral(question: String) {
+        val q = question.trim()
+        if (q.isEmpty() || _state.value.assistant.busy || !_state.value.assistant.installed) return
+        val notes = ProductKnowledge.lookup(q)
+        val prompt = AssistantPrompt.general(q, notes)
+        update {
+            it.copy(
+                assistant = it.assistant.copy(busy = true, error = null),
+                chat = it.chat + ChatMessage(true, q) + ChatMessage(false, "", sources = notes.map { n -> n.title }),
+            )
+        }
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val error = assistant.generate(prompt) { text ->
+                update { s -> s.copy(chat = s.chat.dropLast(1) + s.chat.last().copy(text = text)) }
+            }
+            update { s ->
+                val last = s.chat.last()
+                s.copy(
+                    assistant = s.assistant.copy(busy = false),
+                    chat = s.chat.dropLast(1) + last.copy(error = error, concerns = AssistantPrompt.concerns(last.text)),
+                )
+            }
+        }
+    }
+
+    fun clearChat() {
+        if (!_state.value.assistant.busy) update { it.copy(chat = emptyList()) }
     }
 
     // ---- live physics view ----

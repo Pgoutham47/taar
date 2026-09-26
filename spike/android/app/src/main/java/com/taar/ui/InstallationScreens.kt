@@ -7,11 +7,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
@@ -240,7 +237,7 @@ fun HistoryScreen(
     boardName: String,
     readings: List<Store.LabelledReading>,
     circuitLabels: Map<String, String>,
-    onBack: () -> Unit,
+    onBack: (() -> Unit)?,
 ) {
     // Labelling appends the reading a second time with its label, so keep one row
     // per capture: the last written, which carries the label if there is one.
@@ -248,48 +245,53 @@ fun HistoryScreen(
         .sortedByDescending { it.reading.epochMillis }
     TaarScreen(
         title = "History",
-        subtitle = "$boardName · ${unique.size} readings, newest first",
+        subtitle = if (unique.isEmpty()) boardName else "$boardName · ${unique.size} readings, newest first",
         onBack = onBack,
+        bottomInset = onBack != null,
     ) {
-        if (unique.isEmpty()) Hint("No readings yet.")
+        if (unique.isEmpty()) {
+            TaarCard {
+                Text("No readings yet", style = MaterialTheme.typography.titleMedium)
+                Hint("Every measurement you take is saved here, on this phone.")
+            }
+        }
         for (lr in unique.take(MAX_HISTORY)) {
             val r = lr.reading
             val line = LineState.of(r.lineConfidence)
-            Card(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text(circuitLabels[r.circuitId] ?: r.circuitId, style = MaterialTheme.typography.titleSmall)
-                        Text(time(r.epochMillis), style = MaterialTheme.typography.labelMedium, color = TaarPalette.Grey)
+            TaarCard {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(circuitLabels[r.circuitId] ?: r.circuitId, style = MaterialTheme.typography.titleMedium)
+                        Text(time(r.epochMillis) + (if (r.supplyIsolated) " · supply marked off" else ""),
+                            style = MaterialTheme.typography.bodySmall, color = TaarPalette.Grey)
                     }
-                    Text(
+                    StatusPill(
                         when (line) {
-                            LineState.FLOWING -> "Current flowing"
+                            LineState.FLOWING -> "Current"
                             LineState.UNCLEAR -> "Unclear"
                             LineState.NONE -> "No current"
-                        } + " · %.0f×".format(LineState.contrastOf(r.lineConfidence)) +
-                            (if (r.supplyIsolated) " · supply OFF" else ""),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = when (line) {
-                            LineState.FLOWING -> if (r.supplyIsolated) TaarPalette.Red else TaarPalette.Yellow
-                            LineState.UNCLEAR -> TaarPalette.Amber
-                            LineState.NONE -> TaarPalette.Blue
+                        },
+                        when (line) {
+                            LineState.FLOWING -> if (r.supplyIsolated) Tone.DANGER else Tone.WARNING
+                            LineState.UNCLEAR -> Tone.WARNING
+                            LineState.NONE -> Tone.INFO
                         },
                     )
-                    Text(
-                        "field %.2f µT · sparking %.4f%s%s".format(
-                            r.fieldAmplitudeUt,
-                            r.arcModulationIndex,
-                            if (r.fieldEstimateUsable) "" else " · field not usable",
-                            lr.label?.let { " · marked ${labelName(it)}" } ?: "",
-                        ),
-                        style = MaterialTheme.typography.labelSmall,
-                        fontFamily = FontFamily.Monospace,
-                        color = if (lr.label != null) labelColour(lr.label) else TaarPalette.Grey,
-                    )
                 }
+                Text(
+                    "%.0f× noise · %.2f µT · sparking %.4f%s%s".format(
+                        LineState.contrastOf(r.lineConfidence),
+                        r.fieldAmplitudeUt,
+                        r.arcModulationIndex,
+                        if (r.fieldEstimateUsable) "" else " · field not usable",
+                        lr.label?.let { " · marked ${labelName(it)}" } ?: "",
+                    ),
+                    style = MaterialTheme.typography.labelSmall,
+                    fontFamily = FontFamily.Monospace,
+                    color = if (lr.label != null) labelColour(lr.label) else TaarPalette.Faint,
+                )
             }
         }
-        OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("Back") }
     }
 }
 

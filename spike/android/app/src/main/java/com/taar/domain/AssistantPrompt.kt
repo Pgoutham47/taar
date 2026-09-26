@@ -59,6 +59,38 @@ object AssistantPrompt {
         return out.toString()
     }
 
+    // ---- general questions about the app ----
+
+    val GENERAL_PRESETS = listOf(
+        "How do I take my first measurement?",
+        "What is a reference and why do I need it?",
+        "How does Taar detect sparking?",
+        "Is my data sent anywhere?",
+        "What do the colours mean?",
+    )
+
+    const val GENERAL_SYSTEM = "You are Ask Taar, the in-app guide for the Taar app. Answer the question about " +
+        "using Taar or how it works, in plain, simple English, in at most 5 short sentences. Use only the notes " +
+        "below. If the notes do not cover the question, say you are not sure and suggest the screen to look at. " +
+        "Never invent features, steps or numbers. Never say a wire or circuit is safe or unsafe: Taar is a triage " +
+        "aid and cannot prove that."
+
+    const val MAX_NOTES_CHARS = 1_600
+
+    fun general(question: String, notes: List<ProductKnowledge.Note>): String {
+        val q = question.trim().take(300)
+        val body = StringBuilder()
+        for (n in notes) {
+            val line = "[${n.title}] ${n.text}"
+            if (body.length + line.length + 1 > MAX_NOTES_CHARS) break
+            if (body.isNotEmpty()) body.append('\n')
+            body.append(line)
+        }
+        return "<|im_start|>system\n$GENERAL_SYSTEM<|im_end|>\n" +
+            "<|im_start|>user\nNotes about Taar:\n$body\n\nQuestion: $q<|im_end|>\n" +
+            "<|im_start|>assistant\n"
+    }
+
     private val CERTAIN = listOf(
         Regex("""\b(is|are|it's|its|be)\s+(completely\s+|perfectly\s+|totally\s+|100%\s+)?(safe|unsafe)\b""",
             RegexOption.IGNORE_CASE),

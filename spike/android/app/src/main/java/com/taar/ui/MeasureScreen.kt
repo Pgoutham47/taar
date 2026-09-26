@@ -8,13 +8,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
@@ -126,50 +123,46 @@ private fun SetupStage(
     onSupplyIsolated: (Boolean) -> Unit,
     onStart: () -> Unit,
 ) {
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("1 · Place the phone", style = MaterialTheme.typography.titleSmall)
-            Hint(
-                "Flat on the cable, in the same spot as the reference. Don't hold it.",
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-        }
+    SectionLabel("Step 1 · Place the phone")
+    TaarCard {
+        Text("Flat on the cable, in the same spot as the reference.", style = MaterialTheme.typography.bodyLarge)
+        Hint("Keep it still for 3 seconds. Keep chargers and other live cables away.")
     }
 
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("2 · Is this circuit's supply on?", style = MaterialTheme.typography.titleSmall)
-            Hint("The phone can't see voltage, only current, so it needs you to say.")
-            SupplyOption(
-                selected = !supplyIsolated,
-                title = "ON — normal use",
-                detail = "Taar tells you whether current is flowing and flags anything unusual.",
-                onClick = { onSupplyIsolated(false) },
-            )
-            SupplyOption(
-                selected = supplyIsolated,
-                title = "OFF — I switched the breaker off",
-                detail = "Taar warns you if current is still flowing, e.g. a mislabelled breaker.",
-                onClick = { onSupplyIsolated(true) },
-            )
-        }
-    }
+    SectionLabel("Step 2 · Is this circuit's supply on?")
+    SupplyOption(
+        selected = !supplyIsolated,
+        title = "On · normal use",
+        detail = "Taar tells you whether current is flowing and flags anything unusual.",
+        onClick = { onSupplyIsolated(false) },
+    )
+    SupplyOption(
+        selected = supplyIsolated,
+        title = "Off · I switched the breaker off",
+        detail = "Taar warns you if current is still flowing, for example a mislabelled breaker.",
+        onClick = { onSupplyIsolated(true) },
+    )
+    Hint("The phone senses current, not voltage, so it needs you to say.")
 
-    Button(onClick = onStart, modifier = Modifier.fillMaxWidth().height(56.dp)) {
-        Text("Start measuring · 3 seconds", style = MaterialTheme.typography.titleMedium)
-    }
+    PrimaryButton("Start measuring · 3 seconds", onClick = onStart)
 }
 
+/** A selectable option card: the chosen one is outlined in the brand colour. */
 @Composable
 private fun SupplyOption(selected: Boolean, title: String, detail: String, onClick: () -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 4.dp),
-        verticalAlignment = Alignment.Top,
+    androidx.compose.material3.Surface(
+        onClick = onClick,
+        shape = MaterialTheme.shapes.large,
+        color = if (selected) TaarPalette.Yellow.copy(alpha = 0.08f) else TaarPalette.Surface,
+        border = BorderStroke(if (selected) 2.dp else 1.dp, if (selected) TaarPalette.Yellow else TaarPalette.Outline),
+        modifier = Modifier.fillMaxWidth(),
     ) {
-        RadioButton(selected = selected, onClick = onClick)
-        Column(Modifier.padding(top = 12.dp)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge)
-            Hint(detail)
+        Row(Modifier.padding(horizontal = 8.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            RadioButton(selected = selected, onClick = onClick)
+            Column(Modifier.padding(start = 4.dp, end = 8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(title, style = MaterialTheme.typography.titleMedium)
+                Hint(detail)
+            }
         }
     }
 }
@@ -194,12 +187,10 @@ private fun ResultStage(
         AssistantPanel(state.assistant, onAsk, onImportModel)
     }
 
-    Button(onClick = onMeasureAgain, modifier = Modifier.fillMaxWidth().height(56.dp)) {
-        Text("Measure again", style = MaterialTheme.typography.titleMedium)
-    }
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedButton(onClick = onChangeSetup, modifier = Modifier.weight(1f)) { Text("Change setup") }
-        OutlinedButton(onClick = onDone, modifier = Modifier.weight(1f)) { Text("Done") }
+    PrimaryButton("Measure again", onClick = onMeasureAgain)
+    Row(horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+        SecondaryButton("Change setup", onClick = onChangeSetup, modifier = Modifier.weight(1f))
+        SecondaryButton("Done", onClick = onDone, modifier = Modifier.weight(1f))
     }
     Hint(
         "Supply: " + (if (reading.supplyIsolated) "OFF (you switched it off)" else "ON (normal use)") +
@@ -515,8 +506,9 @@ private fun Teach(label: Status?, onLabel: (Status) -> Unit) {
 
 @Composable
 private fun LabelButton(text: String, colour: Color, onClick: () -> Unit) {
-    OutlinedButton(
+    androidx.compose.material3.OutlinedButton(
         onClick = onClick,
+        shape = MaterialTheme.shapes.medium,
         border = BorderStroke(1.dp, colour),
         colors = ButtonDefaults.outlinedButtonColors(contentColor = colour),
     ) { Text(text) }

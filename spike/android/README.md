@@ -13,17 +13,17 @@ here are checked rather than hoped for.
 | Layer | Compiles | Tested |
 |---|---|---|
 | `dsp/` | ✅ | ✅ 14 checks against golden vectors from the Python spike, including the arc model's features on real iQOO captures |
-| `domain/` | ✅ | ✅ 65 checks on rules, thresholds, calibration, stats, store, classifier, motion, fusion, cable scan and the assistant prompt |
+| `domain/` | ✅ | ✅ 69 checks on rules, thresholds, calibration, stats, store, classifier, motion, fusion, cable scan, the assistant prompts and product knowledge |
 | `sensor/` | ✅ | ❌ needs hardware — first run is on the loaner |
 | `ui/` | ✅ | ❌ no instrumentation tests |
 | `data/` | ✅ | ❌ one file over `Context` |
 
 ```bash
 ./gradlew clean assembleDebug testDebugUnitTest    # BUILD SUCCESSFUL, 23 MB APK (arm64: LiteRT + LLM engine, compressed)
-./tools/verify.sh                                   # 79/79, no Android SDK needed
+./tools/verify.sh                                   # 83/83, no Android SDK needed
 ```
 
-The whole app compiles and packages. **79 of 79 logic checks pass.** What remains
+The whole app compiles and packages. **83 of 83 logic checks pass.** What remains
 unverified is behaviour that only a phone can show: whether the magnetometer
 delivers a usable rate, what the real noise floor is, whether the field deflects at
 3 cm, and whether `UNPROCESSED` audio survives the device's chain. Those are the

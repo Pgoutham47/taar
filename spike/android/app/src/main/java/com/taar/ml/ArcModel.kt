@@ -57,7 +57,10 @@ class ArcModel private constructor(private val interpreter: Interpreter) : Close
             val bytes = context.assets.open(MODEL_ASSET).use { it.readBytes() }
             val buffer = ByteBuffer.allocateDirect(bytes.size).order(ByteOrder.nativeOrder())
             buffer.put(bytes).rewind()
-            val interpreter = Interpreter(buffer, Interpreter.Options().setNumThreads(1))
+            // XNNPACK off: its kernels pick CPU instructions at runtime, and on a CPU that
+            // misreports them (the Android emulator does) that is a native crash on start.
+            // For 3,400 weights the plain kernels are just as fast.
+            val interpreter = Interpreter(buffer, Interpreter.Options().setNumThreads(1).setUseXNNPACK(false))
             ArcModel(interpreter).also { it.selfCheck = it.runSelfCheck(context) }
         }.getOrNull()
     }

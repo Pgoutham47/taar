@@ -76,6 +76,10 @@ object DomainChecks {
         assistantPromptCarriesEvidenceAndRules(),
         assistantPromptStaysInsideTheWindow(),
         assistantFlagsCertaintyAboutSafety(),
+        knowledgeFindsTheRightNote(),
+        knowledgeFallsBackToTheOverview(),
+        knowledgeNotesMakeNoSafetyClaims(),
+        generalPromptStaysInsideTheWindow(),
     )
 
     private fun check(name: String, block: () -> String?): Result =
@@ -906,5 +910,45 @@ object DomainChecks {
             "Possible arcing was observed. Have the connections checked.")
         bad.firstOrNull { AssistantPrompt.concerns(it).isEmpty() }?.let { "missed: $it" }
             ?: fine.firstOrNull { AssistantPrompt.concerns(it).isNotEmpty() }?.let { "false alarm: $it" }
+    }
+
+    // ---- product knowledge ----
+
+    fun knowledgeFindsTheRightNote() = check("knowledge: each question finds its note first") {
+        val cases = mapOf(
+            "How do I record a reference?" to "Recording a reference",
+            "What does the phone check do?" to "Phone check",
+            "Is my data uploaded to the internet?" to "Privacy and offline",
+            "How does it detect sparking?" to "How sparking is detected",
+            "What is cable scan?" to "Cable Scan",
+            "Can it tell me if the wire is safe to touch?" to "Limits and safety",
+            "How do I see amps?" to "Amps calibration",
+            "What does red mean?" to "Colours",
+            "Why did my reading say unreliable?" to "Measurement quality",
+        )
+        cases.entries.firstNotNullOfOrNull { (q, want) ->
+            val got = ProductKnowledge.lookup(q).firstOrNull()?.title
+            if (got != want) "\"$q\" found \"$got\", want \"$want\"" else null
+        }
+    }
+
+    fun knowledgeFallsBackToTheOverview() = check("knowledge: an unrelated question gets the overview only") {
+        val got = ProductKnowledge.lookup("xyzzy plugh").map { it.title }
+        if (got != listOf("What Taar is")) "got $got" else null
+    }
+
+    fun knowledgeNotesMakeNoSafetyClaims() = check("knowledge: no note sounds certain about safety") {
+        ProductKnowledge.notes.firstOrNull { AssistantPrompt.concerns(it.text).isNotEmpty() }?.let { "\"${it.title}\"" }
+    }
+
+    fun generalPromptStaysInsideTheWindow() = check("knowledge: the general prompt keeps its notes within budget") {
+        val p = AssistantPrompt.general("tell me everything", ProductKnowledge.notes)
+        val notes = p.substringAfter("Notes about Taar:\n").substringBefore("\n\nQuestion:")
+        when {
+            notes.length > AssistantPrompt.MAX_NOTES_CHARS -> "notes ${notes.length} chars"
+            "Question: tell me everything" !in p -> "question missing"
+            "Never say a wire or circuit is safe or unsafe" !in p -> "safety rule missing"
+            else -> null
+        }
     }
 }

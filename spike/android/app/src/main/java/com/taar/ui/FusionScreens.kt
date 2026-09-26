@@ -6,12 +6,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -34,50 +31,69 @@ import com.taar.domain.RankedFault
  */
 @Composable
 fun FusionCard(a: Fusion.Analysis, onWhy: () -> Unit) {
-    val tone = a.outcome.tone
-    Card(
-        Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = surfaceOf(tone) ?: CardDefaults.cardColors().containerColor),
-    ) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("TAAR ANALYSIS", style = MaterialTheme.typography.labelLarge, color = TaarPalette.Grey)
-            for (row in a.summaryRows) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(row.name, style = MaterialTheme.typography.bodyMedium)
-                    Text(row.value, style = MaterialTheme.typography.bodyMedium, fontFamily = FontFamily.Monospace,
-                        color = colourOf(row), textAlign = TextAlign.End)
-                }
-            }
-            Text("↓", Modifier.fillMaxWidth(), textAlign = TextAlign.Center, color = TaarPalette.Grey)
-
-            Text("${iconOf(tone)} ${a.outcome.title}", style = MaterialTheme.typography.headlineSmall,
-                color = colourOf(tone), fontWeight = FontWeight.SemiBold)
-            Text(a.outcome.titleTe, style = MaterialTheme.typography.bodyMedium)
-            Text(a.outcome.summary, style = MaterialTheme.typography.bodyMedium)
-            Text("Evidence strength: ${a.strength.name}", style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold)
-            Hint(a.strengthReason)
-
-            HorizontalDivider()
-            Text("WHY?", style = MaterialTheme.typography.labelLarge, color = TaarPalette.Grey)
-            for (w in a.why.take(3)) Text("• $w", style = MaterialTheme.typography.bodyMedium)
-            if (a.conflicts.isNotEmpty()) {
-                Hint("${a.conflicts.size} signal${if (a.conflicts.size == 1) "" else "s"} pointed the " +
-                    "other way. See Why? for details.", color = TaarPalette.Amber)
-            }
-
-            Text("WHAT TO DO", style = MaterialTheme.typography.labelLarge, color = TaarPalette.Grey)
-            for (g in a.whatToDo.take(2)) {
-                Text("• ${g.text}", style = MaterialTheme.typography.bodyMedium)
-                g.textTe?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = TaarPalette.Grey) }
-            }
-
-            OutlinedButton(onClick = onWhy, modifier = Modifier.fillMaxWidth()) {
-                Text("Why? See all evidence →")
-            }
-            Hint(Fusion.CAVEAT)
+    val tone = uiTone(a.outcome.tone)
+    TaarCard(tone = tone) {
+        StatusPill(statusWord(a.outcome.tone), tone)
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(a.outcome.title, style = MaterialTheme.typography.headlineSmall, color = colourOf(a.outcome.tone))
+            Text(a.outcome.titleTe, style = MaterialTheme.typography.bodyMedium, color = TaarPalette.Grey)
         }
+        Text(a.outcome.summary, style = MaterialTheme.typography.bodyMedium)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            StatusPill("Evidence ${a.strength.name.lowercase()}", Tone.NEUTRAL)
+            StatusPill("Quality ${a.quality.name.lowercase()}", when (a.quality) {
+                Fusion.Quality.GOOD -> Tone.SUCCESS
+                Fusion.Quality.FAIR -> Tone.WARNING
+                Fusion.Quality.POOR -> Tone.DANGER
+            })
+        }
+
+        Rule()
+        SectionLabel("Taar analysis")
+        for (row in a.summaryRows) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(row.name, style = MaterialTheme.typography.bodyMedium, color = TaarPalette.Grey)
+                Text(row.value, style = MaterialTheme.typography.bodyMedium, fontFamily = FontFamily.Monospace,
+                    color = colourOf(row).takeIf { it != Color.Unspecified } ?: TaarPalette.Text, textAlign = TextAlign.End)
+            }
+        }
+
+        Rule()
+        SectionLabel("Why")
+        for (w in a.why.take(3)) Text("•  $w", style = MaterialTheme.typography.bodyMedium)
+        if (a.conflicts.isNotEmpty()) {
+            Banner("${a.conflicts.size} signal${if (a.conflicts.size == 1) "" else "s"} pointed the other way. " +
+                "See all evidence for details.", Tone.WARNING)
+        }
+
+        SectionLabel("What to do")
+        for (g in a.whatToDo.take(2)) {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("•  ${g.text}", style = MaterialTheme.typography.bodyMedium)
+                g.textTe?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = TaarPalette.Grey,
+                    modifier = Modifier.padding(start = 14.dp)) }
+            }
+        }
+
+        SecondaryButton("See all evidence", onClick = onWhy)
+        Text(Fusion.CAVEAT, style = MaterialTheme.typography.bodySmall, color = TaarPalette.Faint)
     }
+}
+
+private fun uiTone(t: Fusion.Tone) = when (t) {
+    Fusion.Tone.CRITICAL -> Tone.DANGER
+    Fusion.Tone.WARNING -> Tone.WARNING
+    Fusion.Tone.ADVISORY -> Tone.INFO
+    Fusion.Tone.NORMAL -> Tone.SUCCESS
+    Fusion.Tone.UNRELIABLE -> Tone.WARNING
+}
+
+private fun statusWord(t: Fusion.Tone) = when (t) {
+    Fusion.Tone.CRITICAL -> "Possible anomaly"
+    Fusion.Tone.WARNING -> "Check"
+    Fusion.Tone.ADVISORY -> "Note"
+    Fusion.Tone.NORMAL -> "Normal"
+    Fusion.Tone.UNRELIABLE -> "Measure again"
 }
 
 /** Every signal behind the result, the rules that fired, and the full guidance. */
@@ -205,60 +221,64 @@ fun AssistantPanel(
     ) { uri -> uri?.let(onImportModel) }
     var question by rememberSaveable { mutableStateOf("") }
 
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("ASK TAAR AI", style = MaterialTheme.typography.labelLarge, color = TaarPalette.Grey)
-            Hint("Qwen2.5 · 0.5B · runs on this phone, offline · English")
+    TaarCard {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("Ask Taar AI about this result", style = MaterialTheme.typography.titleMedium)
+                Text("Qwen2.5 · on this phone · English", style = MaterialTheme.typography.bodySmall,
+                    color = TaarPalette.Grey)
+            }
+        }
 
-            when {
-                a.importing != null -> {
-                    Text("Copying the model… ${(a.importing * 100).toInt()}%", style = MaterialTheme.typography.bodyMedium)
-                    androidx.compose.material3.LinearProgressIndicator(
-                        progress = { a.importing }, modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-                !a.installed -> {
-                    Text(
-                        "One-time setup: copy the model file (about 550 MB) to this phone, then pick it here.",
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    Hint("File: ${com.taar.ml.TaarAssistant.MODEL_NAME}")
-                    OutlinedButton(onClick = { pick.launch(arrayOf("*/*")) }, modifier = Modifier.fillMaxWidth()) {
-                        Text("Load model file")
-                    }
-                }
-                else -> {
-                    for (p in com.taar.domain.AssistantPrompt.PRESETS) {
-                        OutlinedButton(onClick = { onAsk(p) }, enabled = !a.busy, modifier = Modifier.fillMaxWidth()) {
-                            Text(p)
-                        }
-                    }
-                    androidx.compose.material3.OutlinedTextField(
-                        value = question,
-                        onValueChange = { question = it.take(300) },
-                        label = { Text("Or ask your own question") },
-                        modifier = Modifier.fillMaxWidth(),
+        when {
+            a.importing != null -> {
+                Text("Loading the assistant… ${(a.importing * 100).toInt()}%", style = MaterialTheme.typography.bodyMedium)
+                androidx.compose.material3.LinearProgressIndicator(
+                    progress = { a.importing }, modifier = Modifier.fillMaxWidth(),
+                    color = TaarPalette.Yellow, trackColor = TaarPalette.SurfaceHigh,
+                )
+            }
+            !a.installed -> {
+                Hint("One-time setup: copy the model file (about 550 MB) to this phone, then pick it.")
+                SecondaryButton("Load model file", onClick = { pick.launch(arrayOf("*/*")) })
+            }
+            else -> {
+                for (p in com.taar.domain.AssistantPrompt.PRESETS) {
+                    androidx.compose.material3.Surface(
+                        onClick = { onAsk(p) },
                         enabled = !a.busy,
-                    )
-                    Button(
-                        onClick = { onAsk(question); question = "" },
-                        enabled = !a.busy && question.isNotBlank(),
+                        shape = MaterialTheme.shapes.medium,
+                        color = TaarPalette.SurfaceHigh,
                         modifier = Modifier.fillMaxWidth(),
-                    ) { Text("Ask") }
+                    ) {
+                        Text(p, style = MaterialTheme.typography.bodyMedium,
+                            color = if (a.busy) TaarPalette.Faint else TaarPalette.Text,
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp))
+                    }
                 }
+                androidx.compose.material3.OutlinedTextField(
+                    value = question,
+                    onValueChange = { question = it.take(300) },
+                    placeholder = { Text("Or ask your own question", color = TaarPalette.Faint) },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !a.busy,
+                    shape = MaterialTheme.shapes.medium,
+                    maxLines = 3,
+                )
+                PrimaryButton("Ask", onClick = { onAsk(question); question = "" },
+                    enabled = !a.busy && question.isNotBlank())
             }
+        }
 
-            a.question?.let { Text("Q: $it", style = MaterialTheme.typography.titleSmall) }
-            if (a.busy && a.answer.isEmpty()) {
-                Hint("Thinking… the first answer takes a few seconds while the model loads.")
-            }
-            if (a.answer.isNotEmpty()) Text(a.answer, style = MaterialTheme.typography.bodyMedium)
-            for (c in a.concerns) Hint("⚠ $c", color = TaarPalette.Amber)
-            a.error?.let { Hint(it, color = TaarPalette.Red) }
-            if (a.answer.isNotEmpty() || a.busy) {
-                Hint("Written on this phone by a small language model from the evidence above. It can be wrong; " +
-                    "the result above is what to act on.")
-            }
+        if (a.question != null || a.busy) Rule()
+        a.question?.let { Text(it, style = MaterialTheme.typography.titleSmall, color = TaarPalette.Yellow) }
+        if (a.busy && a.answer.isEmpty()) Hint("Thinking… the first answer takes a few seconds while the model loads.")
+        if (a.answer.isNotEmpty()) Text(a.answer, style = MaterialTheme.typography.bodyMedium)
+        for (c in a.concerns) Banner(c, Tone.WARNING)
+        a.error?.let { Banner(it, Tone.DANGER) }
+        if (a.answer.isNotEmpty()) {
+            Text("Written on this phone by a small language model from the evidence above. It can be wrong; " +
+                "the result above is what to act on.", style = MaterialTheme.typography.bodySmall, color = TaarPalette.Faint)
         }
     }
 }

@@ -6,10 +6,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -118,9 +115,15 @@ fun PreCheckScreen(state: PreCheckState, onRun: () -> Unit, onDone: () -> Unit) 
             CheckRow(
                 "Background noise",
                 state.noiseOk,
-                if (state.noiseOk) "%.2f µT — fine".format(state.noiseFloorUt)
-                else "%.2f µT — too noisy. Move away from chargers and metal, keep the phone still."
-                    .format(state.noiseFloorUt),
+                when {
+                    state.noiseOk -> "%.2f µT — fine".format(state.noiseFloorUt)
+                    // A real magnetometer always wobbles a little. Exactly none means the
+                    // readings did not change at all: a stuck or simulated sensor.
+                    state.noiseFloorUt <= 0.0 -> "0.00 µT — the readings did not change at all. The sensor " +
+                        "may be stuck or simulated; restart the phone and try again."
+                    else -> "%.2f µT — too noisy. Move away from chargers and metal, keep the phone still."
+                        .format(state.noiseFloorUt)
+                },
             )
         }
         CheckRow(
