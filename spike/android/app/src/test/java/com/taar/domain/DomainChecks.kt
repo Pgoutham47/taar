@@ -44,6 +44,10 @@ object DomainChecks {
         ordinaryArcVariationDoesNotWarn(),
         aRealArcSignatureStillWarns(),
         liveThresholdSeparatesTheMeasuredPopulations(),
+        idleReadingReportsNoAmperes(),
+        calibrationFromTheKettleReadsBack(),
+        calibrationRefusesWhenOffAlreadyFlowing(),
+        calibrationRefusesWhenOnShowsNothing(),
         storeRoundTripsSupplyIsolated(),
     )
 
@@ -527,6 +531,56 @@ object DomainChecks {
                 "reading_unreliable" !in ids -> "did not flag the reading as unreliable: $ids"
                 else -> null
             }
+        }
+
+    // ---- amp calibration ----
+
+    fun idleReadingReportsNoAmperes() = check("an idle reading reports no amperes") {
+        val c = Circuit("c1", "Kettle", baseline = baseline(field = 0.05), utPerAmp = 0.045)
+        val m = Metrics.derive(reading(field = 0.06, live = 0.25), c)
+            ?: return@check "derive returned null"
+        if (m.impliedCurrentA != null) "reported ${m.impliedCurrentA} A from room noise" else null
+    }
+
+    fun calibrationFromTheKettleReadsBack() = check("calibration from the kettle reads back") {
+        val amps = AmpCalibration.ampsFromWatts(1200.0)
+        val r = AmpCalibration.calibrate(
+            offFields = listOf(0.04, 0.04, 0.08),
+            offConfidences = listOf(0.25, 0.09, 0.39),
+            onFields = listOf(0.21, 0.27, 0.25, 0.18, 0.26),
+            onConfidences = listOf(0.76, 0.81, 0.83, 0.87, 0.87),
+            amps = amps,
+        )
+        if (r !is AmpCalibration.Result.Ok) return@check "failed: $r"
+        val c = Circuit("c1", "Kettle", baseline = baseline(field = 0.05), utPerAmp = r.utPerAmp)
+        val back = Metrics.derive(reading(field = r.onMedianUt, live = 0.83), c)?.impliedCurrentA
+        when {
+            !near(amps, 5.217, 0.001) -> "1200 W gave $amps A"
+            !near(r.utPerAmp, 0.25 / amps, 1e-9) -> "uT/A ${r.utPerAmp}, want median-on / amps"
+            back == null -> "no current read back from a calibrated, flowing circuit"
+            !near(back, amps, 1e-9) -> "read back $back A, want $amps"
+            else -> null
+        }
+    }
+
+    fun calibrationRefusesWhenOffAlreadyFlowing() =
+        check("calibration refuses when current flows with the appliance off") {
+            val r = AmpCalibration.calibrate(
+                offFields = listOf(0.2, 0.2, 0.2), offConfidences = listOf(0.8, 0.8, 0.8),
+                onFields = listOf(0.4, 0.4, 0.4), onConfidences = listOf(0.9, 0.9, 0.9),
+                amps = 5.0,
+            )
+            if (r !is AmpCalibration.Result.Failed) "accepted: $r" else null
+        }
+
+    fun calibrationRefusesWhenOnShowsNothing() =
+        check("calibration refuses when the appliance shows no current") {
+            val r = AmpCalibration.calibrate(
+                offFields = listOf(0.05, 0.05), offConfidences = listOf(0.2, 0.2),
+                onFields = listOf(0.06, 0.06), onConfidences = listOf(0.3, 0.3),
+                amps = 5.0,
+            )
+            if (r !is AmpCalibration.Result.Failed) "accepted: $r" else null
         }
 
     fun storeRoundTripsSupplyIsolated() = check("store round-trips the supply-off flag") {

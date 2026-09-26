@@ -93,8 +93,14 @@ data class Metrics(
             val arcZ = Stats.robustZ(reading.arcModulationIndex, baseline.arcModulationIndices,
                 MIN_ARC_SPREAD)
 
+            // No amperes unless current is clearly flowing. At idle the fitted
+            // amplitude is room noise, and dividing noise by a calibration factor
+            // produces a confident, fictional current.
             val current = circuit.utPerAmp
-                ?.takeIf { it > 0 && reading.fieldEstimateUsable }
+                ?.takeIf {
+                    it > 0 && reading.fieldEstimateUsable &&
+                        LineState.of(reading.lineConfidence) == LineState.FLOWING
+                }
                 ?.let { reading.fieldAmplitudeUt / it }
 
             val vsRating = current?.let { c ->
