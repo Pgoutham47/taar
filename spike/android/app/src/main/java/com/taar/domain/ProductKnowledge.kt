@@ -59,7 +59,7 @@ object ProductKnowledge {
         Note("Warnings", "warning warnings arcing overload live switched off breaker high load unreliable rules",
             "Taar has six warnings: possible arcing, current on a circuit you switched off, load near the breaker " +
                 "limit, load higher than usual, switched-off circuit not confirmed, and unreliable reading. Each " +
-                "shows why it fired and what to do, in English and Telugu. A warning appears only when all its " +
+                "shows why it fired and what to do. A warning appears only when all its " +
                 "conditions are true."),
         Note("Measurement quality", "quality moved movement gyroscope unreliable still steady hand hold",
             "Taar checks each reading's quality. The gyroscope notices if the phone turned during the 3 seconds; " +

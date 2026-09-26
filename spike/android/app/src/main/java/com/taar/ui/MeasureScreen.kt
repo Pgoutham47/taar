@@ -380,9 +380,7 @@ private fun ProblemCard(r: RankedFault) {
                 color = if (critical) TaarPalette.Red else TaarPalette.Amber,
                 fontWeight = FontWeight.Bold,
             )
-            Text(r.fault.labelTe, style = MaterialTheme.typography.bodyMedium)
             Text(r.fault.action, style = MaterialTheme.typography.bodyMedium)
-            Text(r.fault.actionTe, style = MaterialTheme.typography.bodySmall)
             Text("Why:", style = MaterialTheme.typography.labelMedium, color = TaarPalette.Grey)
             for (e in r.evidence) {
                 Text("${if (e.holds) "✓" else "✕"} ${e.description}",

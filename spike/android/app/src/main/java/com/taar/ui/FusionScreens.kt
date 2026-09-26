@@ -36,7 +36,6 @@ fun FusionCard(a: Fusion.Analysis, onWhy: () -> Unit) {
         StatusPill(statusWord(a.outcome.tone), tone)
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(a.outcome.title, style = MaterialTheme.typography.headlineSmall, color = colourOf(a.outcome.tone))
-            Text(a.outcome.titleTe, style = MaterialTheme.typography.bodyMedium, color = TaarPalette.Grey)
         }
         Text(a.outcome.summary, style = MaterialTheme.typography.bodyMedium)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -70,8 +69,6 @@ fun FusionCard(a: Fusion.Analysis, onWhy: () -> Unit) {
         for (g in a.whatToDo.take(2)) {
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text("•  ${g.text}", style = MaterialTheme.typography.bodyMedium)
-                g.textTe?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = TaarPalette.Grey,
-                    modifier = Modifier.padding(start = 14.dp)) }
             }
         }
 
@@ -104,7 +101,6 @@ fun WhyStage(a: Fusion.Analysis, faults: List<RankedFault>, onBack: () -> Unit) 
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("${iconOf(a.outcome.tone)} ${a.outcome.title}", style = MaterialTheme.typography.titleLarge,
                 color = colourOf(a.outcome.tone), fontWeight = FontWeight.SemiBold)
-            Text(a.outcome.titleTe, style = MaterialTheme.typography.bodyMedium)
             Text("Evidence strength: ${a.strength.name} · measurement quality: ${a.quality.name}",
                 style = MaterialTheme.typography.labelLarge)
             Hint(a.strengthReason)
@@ -150,7 +146,6 @@ fun WhyStage(a: Fusion.Analysis, faults: List<RankedFault>, onBack: () -> Unit) 
     Section("What to do")
     for (g in a.whatToDo) {
         Text("• ${g.text}", style = MaterialTheme.typography.bodyMedium)
-        g.textTe?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = TaarPalette.Grey) }
     }
 
     Hint(Fusion.CAVEAT)

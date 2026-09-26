@@ -140,7 +140,6 @@ private fun StatusBanner(frame: TaarViewModel.LiveFrame?, live: TaarViewModel.Li
                 color = look.colour, fontWeight = FontWeight.Bold)
             frame?.fusion?.let {
                 Text(it.outcome.title, style = MaterialTheme.typography.titleMedium)
-                Text(it.outcome.titleTe, style = MaterialTheme.typography.bodySmall, color = TaarPalette.Grey)
             }
             if (frame != null && frame.fusion == null) {
                 Hint("Record a reference for this circuit to get a result. The signals below are live.")

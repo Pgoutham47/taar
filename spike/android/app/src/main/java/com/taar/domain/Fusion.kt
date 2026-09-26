@@ -31,76 +31,64 @@ object Fusion {
 
     enum class Tone { CRITICAL, WARNING, ADVISORY, NORMAL, UNRELIABLE }
 
-    enum class Outcome(val title: String, val titleTe: String, val summary: String, val tone: Tone) {
+    enum class Outcome(val title: String, val summary: String, val tone: Tone) {
         CURRENT_ON_ISOLATED(
             "Current detected on a circuit marked off",
-            "ఆఫ్ చేసిన సర్క్యూట్‌లో కరెంట్ కనిపిస్తోంది",
             "You marked this supply as off, but the magnetometer sees current in the cable.",
             Tone.CRITICAL,
         ),
         ELECTRICAL_ANOMALY(
             "Possible electrical anomaly",
-            "విద్యుత్ అసాధారణత ఉండవచ్చు",
             "Current and sound both differ from this wire's normal. Further inspection recommended.",
             Tone.CRITICAL,
         ),
         POSSIBLE_ARCING(
             "Possible arcing / loose connection",
-            "ఆర్సింగ్ / వదులైన కనెక్షన్ ఉండవచ్చు",
             "An arc-like sound pattern was observed while current was flowing. Further inspection recommended.",
             Tone.CRITICAL,
         ),
         NEAR_BREAKER_LIMIT(
             "Load near the breaker's limit",
-            "లోడ్ బ్రేకర్ పరిమితికి దగ్గరగా ఉంది",
             "The estimated current is close to or above this circuit's breaker rating.",
             Tone.CRITICAL,
         ),
         CURRENT_ABNORMAL(
             "Current higher than normal; no arc pattern detected",
-            "కరెంట్ మామూలు కంటే ఎక్కువ; స్పార్కింగ్ నమూనా కనిపించలేదు",
             "Abnormal current behaviour compared with this wire's reference. No arc-like sound was observed.",
             Tone.WARNING,
         ),
         ISOLATION_NOT_CONFIRMED(
             "Switched-off circuit not confirmed",
-            "ఆఫ్ అయినట్లు నిర్ధారించలేదు",
             "You marked this supply as off, but the signal is above room noise.",
             Tone.WARNING,
         ),
         ACOUSTIC_ONLY(
             "Possible acoustic anomaly; electrical fault not confirmed",
-            "శబ్దంలో అసాధారణత ఉండవచ్చు; విద్యుత్ లోపం నిర్ధారించలేదు",
             "The sound looked unusual, but the other signals did not confirm an electrical fault.",
             Tone.ADVISORY,
         ),
         SOUND_NOT_FROM_CABLE(
             "Arc-like sound, but no current in this cable",
-            "స్పార్కింగ్ లాంటి శబ్దం, కానీ ఈ కేబుల్‌లో కరెంట్ లేదు",
             "An arc needs current, and none was detected here. The sound is likely from something nearby.",
             Tone.ADVISORY,
         ),
         UNCLEAR(
             "Unclear reading — measure again",
-            "స్పష్టంగా లేదు — మళ్ళీ కొలవండి",
             "The current signal is between 'none' and 'flowing', so the reading is not interpreted.",
             Tone.UNRELIABLE,
         ),
         UNRELIABLE(
             "Unreliable reading",
-            "రీడింగ్ నమ్మదగినది కాదు",
             "The measurement did not pass the quality checks, so its result is not interpreted.",
             Tone.UNRELIABLE,
         ),
         NO_CURRENT_ISOLATED(
             "No current detected on the switched-off circuit",
-            "ఆఫ్ చేసిన సర్క్యూట్‌లో కరెంట్ కనిపించలేదు",
             "Consistent with the supply being off. The phone senses current, not voltage.",
             Tone.NORMAL,
         ),
         NO_ANOMALY(
             "No anomaly observed",
-            "అసాధారణత కనిపించలేదు",
             "This reading matches this wire's normal. This is an observation, not a safety certificate.",
             Tone.NORMAL,
         ),
@@ -108,7 +96,7 @@ object Fusion {
 
     data class Signal(val name: String, val value: String, val verdict: Verdict, val detail: String)
 
-    data class Guidance(val text: String, val textTe: String? = null)
+    data class Guidance(val text: String)
 
     data class Analysis(
         val outcome: Outcome,
@@ -445,9 +433,9 @@ object Fusion {
     // ---- what to do ----
 
     private fun guidance(outcome: Outcome, faults: List<RankedFault>): List<Guidance> = buildList {
-        // The existing guidance first, in the rules engine's order, with its Telugu.
+        // The existing guidance first, in the rules engine's order.
         faults.filter { it.fault.severity != Status.UNKNOWN }
-            .forEach { add(Guidance(it.fault.action, it.fault.actionTe)) }
+            .forEach { add(Guidance(it.fault.action)) }
         when (outcome) {
             Outcome.ELECTRICAL_ANOMALY, Outcome.POSSIBLE_ARCING -> {
                 add(Guidance("Inspect the connections on this circuit, or have a qualified electrician do it."))
@@ -462,16 +450,13 @@ object Fusion {
             Outcome.SOUND_NOT_FROM_CABLE ->
                 add(Guidance("Look for the source nearby: another cable, an appliance or a speaker."))
             Outcome.UNRELIABLE -> {
-                add(Guidance("Press the phone flat against the cable, hold it still for 3 seconds, and measure again.",
-                    "ఫోన్‌ను కేబుల్‌పై కదలకుండా 3 సెకన్లు ఉంచి మళ్ళీ కొలవండి."))
+                add(Guidance("Press the phone flat against the cable, hold it still for 3 seconds, and measure again."))
                 add(Guidance("If this keeps happening, redo the phone check."))
             }
             Outcome.UNCLEAR ->
-                add(Guidance("Keep the phone still on the cable and measure again.",
-                    "ఫోన్ కదలకుండా ఉంచి మళ్ళీ కొలవండి."))
+                add(Guidance("Keep the phone still on the cable and measure again."))
             Outcome.NO_CURRENT_ISOLATED, Outcome.CURRENT_ON_ISOLATED, Outcome.ISOLATION_NOT_CONFIRMED ->
-                add(Guidance("Confirm with a voltage tester before touching. The phone senses current, not voltage.",
-                    "తాకే ముందు వోల్టేజ్ టెస్టర్‌తో నిర్ధారించుకోండి."))
+                add(Guidance("Confirm with a voltage tester before touching. The phone senses current, not voltage."))
             Outcome.NO_ANOMALY ->
                 add(Guidance("No action suggested by this reading. Measure again if something changes."))
         }

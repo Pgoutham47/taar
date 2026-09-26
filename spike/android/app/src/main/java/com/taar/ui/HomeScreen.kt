@@ -45,7 +45,7 @@ fun HomeScreen(
     val calibrated = circuit?.utPerAmp != null
     val done = listOf(phoneOk, hasCircuit, hasReference).count { it }
 
-    TaarScreen(title = "Taar", subtitle = "Electrical triage from your phone · తార", bottomInset = false) {
+    TaarScreen(title = "Taar", subtitle = "Electrical triage from your phone", bottomInset = false) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             StatusPill("Offline", Tone.SUCCESS)
             StatusPill(

@@ -84,7 +84,7 @@ object TaarPalette {
     val Grey = Color(0xFFA0A8B8)
     val Faint = Color(0xFF6B7385)
 
-    val Yellow = Color(0xFFFFC940)   // brand: తార, a star
+    val Yellow = Color(0xFFFFC940)   // brand yellow
     val Green = Color(0xFF34D399)
     val Amber = Color(0xFFF5A524)
     val Red = Color(0xFFF87171)
