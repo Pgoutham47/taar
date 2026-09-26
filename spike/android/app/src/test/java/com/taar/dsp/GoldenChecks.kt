@@ -30,6 +30,7 @@ object GoldenChecks {
         magnitudeReductionDestroysAPerpendicularAcField(),
         contrastSurvivesDriftThatKillsPlainPower(),
         contrastIsNearOneWithNoSignal(),
+        arcFeaturesMatchPython(goldenDir),
     )
 
     // ---- fixtures ----
@@ -262,5 +263,45 @@ object GoldenChecks {
         val freqs = Fft.frequencies(n, sr)
         val peak = power.indices.maxByOrNull { power[it] }!!
         if (abs(freqs[peak] - 100.0) >= 1.0) "peak at ${freqs[peak]} Hz" else null
+    }
+
+    /**
+     * The model was trained on features computed in Python. These are three real
+     * iQOO captures and the features Python computed from them; if the Kotlin port
+     * drifts, the model on the phone is fed numbers it never learned from.
+     */
+    fun arcFeaturesMatchPython(dir: File) = check("arc features match Python on real captures") {
+        val arcDir = File(dir, "arc")
+        val table = rows(arcDir, "arc_features.csv")
+        if (table.isEmpty()) return@check "no fixtures at ${arcDir.absolutePath}"
+        var worst = 0.0
+        for (r in table) {
+            val (audio, rate) = readWav(File(arcDir, r[0]))
+            val got = ArcFeatures.of(audio, rate) ?: return@check "${r[0]}: no features"
+            if (got.size != r.size - 2) return@check "${r[0]}: ${got.size} features, want ${r.size - 2}"
+            for (k in got.indices) worst = maxOf(worst, abs(got[k] - r[k + 2].toDouble()))
+        }
+        // log10 units; float32 output alone accounts for ~1e-6.
+        if (worst > 1e-4) "worst feature differs by $worst" else null
+    }
+
+    /** 16-bit mono PCM, scaled to [-1, 1] exactly as AudioCapture does. */
+    private fun readWav(file: File): Pair<DoubleArray, Double> {
+        val b = file.readBytes()
+        fun u16(i: Int) = (b[i].toInt() and 0xff) or ((b[i + 1].toInt() and 0xff) shl 8)
+        fun u32(i: Int) = u16(i) or (u16(i + 2) shl 16)
+        var i = 12
+        var rate = 0
+        while (i + 8 <= b.size) {
+            val id = String(b, i, 4)
+            val size = u32(i + 4)
+            if (id == "fmt ") rate = u32(i + 12)
+            if (id == "data") {
+                val n = size / 2
+                return DoubleArray(n) { u16(i + 8 + 2 * it).toShort() / 32_768.0 } to rate.toDouble()
+            }
+            i += 8 + size + (size and 1)
+        }
+        error("no data chunk in ${file.name}")
     }
 }

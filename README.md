@@ -48,7 +48,7 @@ of response time cannot have a network round trip inside it.
 | [`docs/PREFLIGHT.md`](docs/PREFLIGHT.md) | The hour-one measurement form, with the hardware results filled in |
 | [`spike/dsp/`](spike/dsp/) | Can a phone magnetometer see 50 Hz? |
 | [`spike/audio/`](spike/audio/) | Does an arc separate from a ballast, speech, a rustle and a motor? |
-| [`spike/android/`](spike/android/) | The app — builds clean, 55/55 logic checks pass |
+| [`spike/android/`](spike/android/) | The app — builds clean, 85/85 logic checks pass, on-device TFLite arc model |
 
 ---
 

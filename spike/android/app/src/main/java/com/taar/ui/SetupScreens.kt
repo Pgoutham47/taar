@@ -23,6 +23,9 @@ import androidx.compose.ui.unit.dp
 import com.taar.domain.AmpCalibration
 import com.taar.domain.Circuit
 import com.taar.domain.LineState
+import com.taar.domain.MotionCheck
+import com.taar.ml.ArcModel
+import kotlin.math.roundToInt
 
 /**
  * Recording a reference, as a guided sequence: what it is, how to set up, a start
@@ -84,6 +87,8 @@ fun ReferenceScreen(
                                 "%.0f×".format(LineState.contrastOf(it))
                             },
                         )
+                        AiReferenceLine(state.referenceAi)
+                        MotionReferenceLine(state.referenceMotion)
                     }
                 }
                 Button(onClick = onMeasure, modifier = Modifier.fillMaxWidth().height(56.dp)) {
@@ -266,4 +271,47 @@ private fun summary(confidences: List<Double>): String {
     }
     return "${confidences.size} captures, $verdict (" +
         confidences.joinToString(" · ") { "%.0f×".format(LineState.contrastOf(it)) } + ")"
+}
+
+/**
+ * What the on-device model heard during the reference. A reference is meant to be
+ * healthy, so sparking heard here is worth saying before it becomes "normal".
+ */
+@Composable
+private fun AiReferenceLine(scores: List<Float>) {
+    if (scores.isEmpty()) return
+    val arcLike = scores.count { it >= ArcModel.THRESHOLD }
+    Hint(
+        "On-device AI, sparking sound in each capture: " +
+            scores.joinToString(" · ") { "${(it * 100).roundToInt()}%" },
+        color = if (arcLike == 0) TaarPalette.Green else TaarPalette.Amber,
+    )
+    if (arcLike > 0) {
+        Hint(
+            "The AI heard a sparking-like sound in $arcLike of ${scores.size} captures. If this " +
+                "circuit is not known to be healthy, redo the reference somewhere quiet.",
+            color = TaarPalette.Amber,
+        )
+    }
+}
+
+/**
+ * A reference is what every later reading is compared with, so one taken while
+ * the phone was moving quietly spoils all of them. Said here, while redoing it is
+ * one tap away.
+ */
+@Composable
+private fun MotionReferenceLine(motion: List<Double>) {
+    if (motion.isEmpty()) return
+    val moved = motion.indices.filter { MotionCheck.level(motion[it]) == MotionCheck.Level.MOVED }
+    if (moved.isEmpty()) {
+        Hint("Phone movement in each capture: " + motion.joinToString(" · ") { motionWord(MotionCheck.level(it)) },
+            color = TaarPalette.Green)
+    } else {
+        Hint(
+            "The phone moved in capture ${moved.joinToString(", ") { "${it + 1}" }} of ${motion.size}. " +
+                "Every measurement is compared with this reference, so redo it holding the phone still.",
+            color = TaarPalette.Amber,
+        )
+    }
 }

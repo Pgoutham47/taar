@@ -16,3 +16,6 @@ spike/android/.kotlin/
 
 # macOS
 .DS_Store
+spike/audio/playback/
+.venv-train/
+spike/audio/model/

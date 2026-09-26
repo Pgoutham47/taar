@@ -15,6 +15,10 @@ android {
         versionCode = 1
         versionName = "0.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // LiteRT ships a native library per ABI. The iQOO is arm64; x86_64 keeps the
+        // emulator working. Dropping the other two saves about 10 MB of APK.
+        ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
     }
 
     buildTypes {
@@ -46,6 +50,12 @@ dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.6")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+    // On-device arc model (assets/taar_arc.tflite). 1.4.x rather than 2.x: 2.x pulls in
+    // lifecycle 2.10 and guava, and this needs nothing but the interpreter.
+    implementation("com.google.ai.edge.litert:litert:1.4.2")
+    // Room 3D Scan: on-device motion tracking and surface detection. Adds no permissions
+    // of its own beyond querying for the ARCore service.
+    implementation("com.google.ar:core:1.56.0")
 
     testImplementation("junit:junit:4.13.2")
 

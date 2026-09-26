@@ -46,25 +46,32 @@ def room(n: int, rng: np.random.Generator, level: float = 0.02) -> np.ndarray:
     return level * (2.5 * rumble + 0.6 * _pink(n, rng))
 
 
-def arc(n: int, rng: np.random.Generator, level: float = 1.0) -> np.ndarray:
+def arc(n: int, rng: np.random.Generator, level: float = 1.0, *,
+        rep_hz: float = ARC_REP_HZ, jitter: float = 0.06, skip: float = 0.12,
+        width_ms: tuple = (0.35, 1.1), hiss_hz: float = 3000.0,
+        buzz: float = 0.15) -> np.ndarray:
     """
     A series arc: short broadband bursts locked to 100 Hz, with the irregularity
     a real re-ignition has -- jittered timing, varying amplitude, occasional
     skipped half-cycles.
+
+    The keyword arguments exist so `make_playback.py` can vary the arc, and can
+    build near-misses from the same bursts: a `rep_hz` off the line, or a `jitter`
+    large enough that the bursts are no longer locked to it.
     """
     t = np.arange(n) / SR
     env = np.zeros(n)
-    period = SR / ARC_REP_HZ
+    period = SR / rep_hz
 
     k = 0
     while True:
-        centre = k * period + rng.normal(0, period * 0.06)
+        centre = k * period + rng.normal(0, period * jitter)
         k += 1
         if centre >= n:
             break
-        if rng.random() < 0.12:  # a half-cycle that does not strike
+        if rng.random() < skip:  # a half-cycle that does not strike
             continue
-        width = int(SR * rng.uniform(0.00035, 0.0011))
+        width = int(SR * rng.uniform(width_ms[0] / 1000, width_ms[1] / 1000))
         start = max(0, int(centre))
         stop = min(n, start + width)
         if stop <= start:
@@ -72,10 +79,10 @@ def arc(n: int, rng: np.random.Generator, level: float = 1.0) -> np.ndarray:
         burst = np.exp(-np.linspace(0, 4, stop - start))
         env[start:stop] += burst * rng.uniform(0.5, 1.0)
 
-    hiss = sosfilt(butter(4, 3000 / (SR / 2), btype="high", output="sos"),
+    hiss = sosfilt(butter(4, hiss_hz / (SR / 2), btype="high", output="sos"),
                    rng.normal(0, 1, n))
-    buzz = 0.15 * np.sin(2 * np.pi * 100 * t)  # mechanical hum at 2x line
-    return level * (env * hiss + buzz)
+    hum = buzz * np.sin(2 * np.pi * 100 * t)  # mechanical hum at 2x line
+    return level * (env * hiss + hum)
 
 
 def ballast(n: int, rng: np.random.Generator, level: float = 1.0) -> np.ndarray:

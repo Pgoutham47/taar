@@ -2,20 +2,26 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!--
-      RECORD_AUDIO is the only permission requested. There is deliberately no
-      INTERNET permission: the app has no server, no account and nothing to upload,
-      and its absence from this file is a claim a judge can check in thirty seconds.
+      There is deliberately no INTERNET permission: the app has no server, no account
+      and nothing to upload, and its absence from this file is a claim a judge can
+      check in thirty seconds. RECORD_AUDIO is for arc detection; CAMERA is used only
+      by Room 3D Scan, for ARCore's on-device tracking, and is asked for there.
     -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.CAMERA" />
 
     <uses-feature android:name="android.hardware.sensor.compass" android:required="true" />
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
+    <!-- Room 3D Scan is optional: phones without ARCore run everything else. -->
+    <uses-feature android:name="android.hardware.camera.ar" android:required="false" />
 
     <application
         android:allowBackup="false"
         android:label="Taar"
         android:supportsRtl="true"
         android:theme="@style/Theme.Taar">
+
+        <meta-data android:name="com.google.ar.core" android:value="optional" />
 
         <activity
             android:name=".ui.MainActivity"

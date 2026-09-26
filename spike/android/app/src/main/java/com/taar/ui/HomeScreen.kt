@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -17,6 +18,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.taar.domain.Circuit
 import com.taar.domain.LineState
+import com.taar.ml.ArcModel
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -114,6 +116,8 @@ fun HomeScreen(
             }
         }
 
+        AiStatus(state.aiSelfCheck)
+
         // One primary action: the next unfinished step, or Measure once ready.
         val (label, target) = when {
             state.phoneCheck == null || phoneFailed -> "Next: phone check" to MainActivity.Screen.PHONE_CHECK
@@ -130,6 +134,21 @@ fun HomeScreen(
             Hint("Put the phone flat on the cable, tap Measure, and keep still for 3 seconds.")
         }
 
+        Button(
+            onClick = { onGo(MainActivity.Screen.LIVE) },
+            modifier = Modifier.fillMaxWidth().height(52.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = TaarPalette.Blue),
+        ) { Text("See What Taar Sees · live physics", style = MaterialTheme.typography.titleMedium) }
+
+        OutlinedButton(onClick = { onGo(MainActivity.Screen.ROOM) }, modifier = Modifier.fillMaxWidth()) {
+            Text("Room 3D Scan · experimental")
+        }
+
+        if (hasReference) {
+            OutlinedButton(onClick = { onGo(MainActivity.Screen.CABLE_SCAN) }, modifier = Modifier.fillMaxWidth()) {
+                Text("Cable Scan · where along the cable?")
+            }
+        }
         OutlinedButton(onClick = { onGo(MainActivity.Screen.HISTORY) }, modifier = Modifier.fillMaxWidth()) {
             Text("History")
         }
@@ -146,4 +165,17 @@ fun time(millis: Long): String {
     val day = SimpleDateFormat("yyyyMMdd", Locale.getDefault())
     val today = day.format(Date()) == day.format(Date(millis))
     return SimpleDateFormat(if (today) "HH:mm" else "d MMM HH:mm", Locale.getDefault()).format(Date(millis))
+}
+
+/** Whether the on-device model loaded and reproduces its training outputs on this phone. */
+@Composable
+private fun AiStatus(check: ArcModel.SelfCheck?) {
+    val (text, colour) = when {
+        check == null -> "On-device AI: not available on this phone · sparking check uses the rule alone" to
+            TaarPalette.Grey
+        check.passed -> "✓ On-device AI ready · TFLite model self-check passed (${check.rows}/${check.rows})" to
+            TaarPalette.Green
+        else -> "✕ On-device AI self-check failed · its opinion is not shown reliably" to TaarPalette.Red
+    }
+    Hint(text, color = colour)
 }

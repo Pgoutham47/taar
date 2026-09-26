@@ -140,3 +140,90 @@ Then:
    magnetometer, which is on much firmer ground.
 4. Record a ballast or transformer if the venue has one. It is the confounder that
    matters and the only one you cannot simulate honestly.
+
+---
+
+## Without a dimmer: speaker playback
+
+No dimmer and lamp could be sourced at the venue, and mains wiring is not assembled
+on a hackathon floor. The fallback is to synthesise the arc, play it through a
+speaker and record it on the phone, so the model at least hears the real speaker,
+room and microphone chain.
+
+```bash
+.venv/bin/python spike/audio/make_playback.py        # ~5 s, writes spike/audio/playback/
+```
+
+| file | label | what is in it |
+|---|---|---|
+| `arc.wav` | arc | 10 min of varied arcs: level, jitter, skipped strikes, burst width, hiss band |
+| `not_arc.wav` | not_arc | 10 min, mostly **near-misses built from the same bursts** — off the line rate, or at it but unlocked — plus ballast, motor, speech, rustle, steady hiss |
+| `demo_arc.wav` | — | 60 s of one steady arc, for the stage |
+| `manifest.csv` | — | every segment's kind, level and parameters |
+
+`not_arc.wav` exists because of one trap: if only arcs come out of the speaker, a
+model learns "speaker", not "arc". Both files go through the same speaker at the
+same volume, and the only thing separating them is the 100 Hz lock.
+
+The script checks its own output against `arcdetect.modulation_index` before
+anything is played (seed 7, threshold from quiet-room baselines at 5% false alarm):
+
+| kind | segments | above threshold |
+|---|---:|---:|
+| arc | 96 | **100%** |
+| off-rate bursts | 29 | 0% |
+| unlocked bursts | 25 | 4% |
+| steady hiss | 6 | 0% |
+| ballast · motor · speech · rustle | 38 | 0–9% |
+
+### Recording protocol
+
+1. **One speaker, fixed volume** for both playlists. Note which speaker.
+2. Play `arc.wav`; take 3 s captures labelled **arc** at 10, 30 and 60 cm.
+   Play `not_arc.wav`; the same, labelled **not_arc**.
+3. With nothing playing, capture real venue sound as **not_arc**: fans, AC,
+   talking, laptop chargers, tube lights, rustling, a quiet corner.
+4. Spread this over **at least four sessions** in different places. Write the
+   session on every capture.
+5. **Split train and test by session, never by clip.** Clips from one session
+   share a room and a speaker position; a random split leaks both and reports
+   accuracy the demo will not reproduce.
+
+### What this does not establish
+
+That a real arc sounds like `arc()`. A model trained on this learns the synthesis,
+heard through a real phone. The pitch says **simulated arc, real phone, real
+not-arc** — and that the same pipeline retrains on a dimmer rig's recordings
+unchanged.
+
+---
+
+## The arc model
+
+```bash
+python3 -m venv .venv-train && .venv-train/bin/pip install tensorflow scipy
+.venv-train/bin/python spike/audio/train_arc.py --data ~/Downloads/taar_recordings
+```
+
+`arcfeatures.py` turns one 3 s capture into 89 numbers using only DSP the app
+already runs — the same filter coefficients (read from `golden/filter_sos.csv`),
+the same decimation and the same FFT sizes — so the Kotlin port is a
+transcription, not a re-derivation. Every feature is a fraction, so loudness and
+distance cannot be what the model learns. `train_arc.py` fits a 89→32→16→1 network,
+scores it on a session it never heard beside the app's rule, retrains on
+everything and writes `model/taar_arc.tflite` (16.6 KB), `model_card.json` and
+`golden_features.csv` for the Kotlin test.
+
+First run, iQOO, 26 Sept — session 1 (one table, three distances) and a short
+session 2 (another spot, 30 cm):
+
+| held-out session | | model | rule |
+|---|---|---:|---:|
+| s1 (trained on s2 only) | detection | 94.8% | 100% |
+| | **false alarm** | **0.6%** | 10.2% |
+| s2 (trained on s1) | detection | 100% | 100% |
+| | false alarm | 0% | 0% |
+
+The model trades about 5% of detections for a false-alarm rate a sixteenth of
+the rule's, on the session it was not trained on. Two sessions is thin, s2 is
+small and easy, and the arc is still synthetic through a speaker.

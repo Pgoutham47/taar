@@ -22,10 +22,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.core.content.ContextCompat
 import com.taar.data.AndroidFileSystem
+import com.taar.domain.RoomStore
+import com.taar.domain.ScanStore
 import com.taar.domain.Store
 import com.taar.sensor.AudioCapture
 import com.taar.sensor.CaptureCoordinator
 import com.taar.sensor.MagCapture
+import com.taar.sensor.MotionCapture
+import com.taar.ml.ArcModel
 
 /**
  * Wiring and navigation.
@@ -40,11 +44,12 @@ import com.taar.sensor.MagCapture
  */
 class MainActivity : ComponentActivity() {
 
-    enum class Screen { HOME, PHONE_CHECK, CIRCUITS, REFERENCE, MEASURE, CALIBRATE, HISTORY }
+    enum class Screen { HOME, PHONE_CHECK, CIRCUITS, REFERENCE, MEASURE, CABLE_SCAN, LIVE, ROOM, CALIBRATE, HISTORY }
 
     private lateinit var viewModel: TaarViewModel
     private lateinit var mag: MagCapture
     private lateinit var audio: AudioCapture
+    private var arcModel: ArcModel? = null
 
     private var audioGranted by mutableStateOf(false)
 
@@ -59,7 +64,10 @@ class MainActivity : ComponentActivity() {
         mag = MagCapture(sensorManager)
         audio = AudioCapture()
         val store = Store(AndroidFileSystem(this))
-        viewModel = TaarViewModel(CaptureCoordinator(mag, audio), store)
+        arcModel = ArcModel.load(this)
+        val coordinator = CaptureCoordinator(mag, audio, MotionCapture(sensorManager), arcModel)
+        val files = AndroidFileSystem(this)
+        viewModel = TaarViewModel(coordinator, store, ScanStore(files), RoomStore(files), arcModel?.selfCheck)
         viewModel.bootstrap()
 
         audioGranted = ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) ==
@@ -75,7 +83,11 @@ class MainActivity : ComponentActivity() {
 
                     // Back is swallowed while a capture runs: leaving mid-capture left
                     // the next screen waiting on a capture it had not started.
-                    BackHandler(enabled = screen != Screen.HOME) { if (!state.busy) home() }
+                    // The live view is the exception: it only watches, so back pauses it and leaves.
+                    BackHandler(enabled = screen != Screen.HOME) {
+                        if (screen == Screen.LIVE) { viewModel.pauseLive(); home() }
+                        else if (!state.busy) home()
+                    }
 
                     when (screen) {
                         Screen.HOME -> HomeScreen(
@@ -130,6 +142,43 @@ class MainActivity : ComponentActivity() {
                             onBack = home,
                         )
 
+                        Screen.CABLE_SCAN -> {
+                            LaunchedEffect(Unit) { viewModel.beginCableScan() }
+                            CableScanScreen(
+                                state = state,
+                                circuit = viewModel.selectedCircuit,
+                                onStart = { viewModel.startCableScan() },
+                                onStop = { viewModel.stopCableScan() },
+                                onOpen = { viewModel.openScan(it) },
+                                onBack = home,
+                            )
+                        }
+
+                        Screen.LIVE -> LivePhysicsScreen(
+                            state = state,
+                            circuit = viewModel.selectedCircuit,
+                            onStart = { viewModel.startLive() },
+                            onPause = { viewModel.pauseLive() },
+                            onStop = { viewModel.stopLive() },
+                            onReset = { viewModel.resetLive() },
+                            onBack = home,
+                        )
+
+                        Screen.ROOM -> {
+                            LaunchedEffect(Unit) { viewModel.beginRoomScan() }
+                            RoomScanScreen(
+                                state = state,
+                                circuit = viewModel.selectedCircuit,
+                                onPinned = { viewModel.roomPointPinned() },
+                                onCancelPoint = { viewModel.cancelRoomPoint() },
+                                onMeasure = { id, at -> viewModel.measureRoomPoint(id, at) },
+                                onFinish = { planes, refined -> viewModel.finishRoomScan(planes, refined) },
+                                onOpen = { viewModel.openRoom(it) },
+                                onNewScan = { viewModel.beginRoomScan() },
+                                onBack = home,
+                            )
+                        }
+
                         Screen.CALIBRATE -> {
                             LaunchedEffect(Unit) { viewModel.beginCalibration() }
                             CalibrateScreen(
@@ -157,6 +206,11 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onDestroy() {
+        arcModel?.close()
+        super.onDestroy()
     }
 }
 

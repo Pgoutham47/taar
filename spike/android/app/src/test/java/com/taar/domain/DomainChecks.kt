@@ -53,6 +53,35 @@ object DomainChecks {
         calibratedKettleRaisesHigherLoad(),
         calibratedSmallRiseIsNotAHigherLoad(),
         calibratedIdleIsNotAHigherLoad(),
+        motionLevelsAreOrdered(),
+        motionRmsCombinesAxes(),
+        steadyHandIsNotMoved(),
+        fusionHealthyIsNoAnomaly(),
+        fusionArcWithAiAgreementIsArcing(),
+        fusionArcPlusHighCurrentIsElectricalAnomaly(),
+        fusionAudioOnlyIsAcousticAnomaly(),
+        fusionCurrentOnlyReportsNoArcPattern(),
+        fusionMovedIsUnreliableButKeepsCriticalGuidance(),
+        fusionCurrentOnIsolatedSurvivesMovement(),
+        fusionArcSoundWithoutCurrentIsNotFromCable(),
+        fusionNeverClaimsSafety(),
+        scanFindsAConsistentZone(),
+        scanIgnoresASingleSpike(),
+        scanIgnoresDiscardedPoints(),
+        scanReportsUniformSignal(),
+        scanNeedsEnoughPoints(),
+        scanDownweightsFairPoints(),
+        scanStrengthIsBounded(),
+        scanStoreRoundTrips(),
+        roomOneReadingNeverMakesAZone(),
+        roomNearbyAnomaliesFormAZone(),
+        roomMovedReadingsTakeNoPart(),
+        roomNeedsEnoughPoints(),
+        roomActivityScaleMatchesThresholds(),
+        roomHeatStaysLocal(),
+        roomPathJoinsOnlyNearbyStrongPoints(),
+        roomCoverageCountsSurfaceNearPoints(),
+        roomStoreRoundTrips(),
     )
 
     private fun check(name: String, block: () -> String?): Result =
@@ -642,5 +671,330 @@ object DomainChecks {
     fun calibratedIdleIsNotAHigherLoad() = check("a calibrated idle reading is not a higher load") {
         val (ranked, _) = diagnose(kettle(field = 0.05, live = 0.20), reading(field = 0.08, live = 0.30))
         if (ranked.isNotEmpty()) "raised ${ranked.map { it.fault.id }}" else null
+    }
+
+    fun motionLevelsAreOrdered() = check("motion: resting is still, turning is moved") {
+        when {
+            MotionCheck.level(0.005) != MotionCheck.Level.STILL -> "0.005 rad/s not still"
+            MotionCheck.level(0.5) != MotionCheck.Level.MOVED -> "0.5 rad/s not moved"
+            MotionCheck.STILL_BELOW >= MotionCheck.MOVED_ABOVE -> "thresholds out of order"
+            else -> null
+        }
+    }
+
+    fun motionRmsCombinesAxes() = check("motion RMS combines all three gyroscope axes") {
+        // 0.3 rad/s about one axis is the same turn as 0.3 split across all three.
+        val one = MotionCheck.rmsRadPerS(DoubleArray(50) { 0.3 }, DoubleArray(50), DoubleArray(50))
+        val c = 0.3 / kotlin.math.sqrt(3.0)
+        val three = MotionCheck.rmsRadPerS(DoubleArray(50) { c }, DoubleArray(50) { c }, DoubleArray(50) { c })
+        when {
+            kotlin.math.abs(one - 0.3) > 1e-12 -> "single axis gave $one"
+            kotlin.math.abs(three - 0.3) > 1e-12 -> "three axes gave $three"
+            MotionCheck.rmsRadPerS(DoubleArray(0), DoubleArray(0), DoubleArray(0)) != 0.0 -> "empty not 0"
+            else -> null
+        }
+    }
+
+    fun steadyHandIsNotMoved() = check("a steady hand is not reported as moved") {
+        // Tremor of a hand pressed on a cable: small, fast, and centred on zero.
+        val n = 150
+        val x = DoubleArray(n) { 0.06 * kotlin.math.sin(it * 0.9) }
+        val y = DoubleArray(n) { 0.04 * kotlin.math.cos(it * 1.3) }
+        val level = MotionCheck.level(MotionCheck.rmsRadPerS(x, y, DoubleArray(n)))
+        if (level == MotionCheck.Level.MOVED) "tremor reported as moved" else null
+    }
+
+    // ---- fusion ----
+
+    private fun fuse(
+        r: Reading, ai: Float? = 0.02f, motion: Double? = 0.01, circuit: Circuit? = null,
+        history: List<Reading> = emptyList(),
+    ): Fusion.Analysis {
+        val c = circuit ?: Circuit("c1", "Sockets", breakerRatingA = 16.0, baseline = baseline())
+        val m = Metrics.derive(r, c)!!
+        val t = Thresholds.DEFAULT
+        return Fusion.analyse(
+            Fusion.Input(
+                metrics = m, thresholds = t, faults = RulesEngine.rank(m, t),
+                aiArcProbability = ai, aiThreshold = 0.5f, motionRadPerS = motion,
+                audioCaptured = true, unprocessedAudio = true, breakerRatingA = c.breakerRatingA,
+                history = history.mapNotNull { Metrics.derive(it, c) },
+            ),
+        )
+    }
+
+    private fun expect(a: Fusion.Analysis, want: Fusion.Outcome): String? =
+        if (a.outcome != want) "got ${a.outcome}, want $want (why: ${a.why})" else null
+
+    fun fusionHealthyIsNoAnomaly() = check("fusion: a healthy reading is 'no anomaly observed'") {
+        val a = fuse(reading())
+        expect(a, Fusion.Outcome.NO_ANOMALY)
+            ?: if (a.quality != Fusion.Quality.GOOD) "quality ${a.quality}" else null
+    }
+
+    fun fusionArcWithAiAgreementIsArcing() = check("fusion: rule and AI agreeing on an arc is possible arcing") {
+        val a = fuse(reading(arc = 0.5), ai = 0.95f)
+        expect(a, Fusion.Outcome.POSSIBLE_ARCING)
+            ?: if (a.strength == Fusion.Strength.LOW) "two agreeing signals rated LOW" else null
+    }
+
+    fun fusionArcPlusHighCurrentIsElectricalAnomaly() =
+        check("fusion: arc pattern plus abnormal current is a possible electrical anomaly") {
+            val a = fuse(reading(field = 20.0, arc = 0.5), ai = 0.9f)
+            expect(a, Fusion.Outcome.ELECTRICAL_ANOMALY)
+                ?: if (a.strength != Fusion.Strength.HIGH) "three agreeing signals rated ${a.strength}" else null
+        }
+
+    fun fusionAudioOnlyIsAcousticAnomaly() =
+        check("fusion: normal current + AI-only arc sound is an acoustic anomaly, fault not confirmed") {
+            val a = fuse(reading(), ai = 0.9f)
+            expect(a, Fusion.Outcome.ACOUSTIC_ONLY)
+                ?: if (a.conflicts.isEmpty()) "rule disagreeing with the AI not reported as a conflict" else null
+        }
+
+    fun fusionCurrentOnlyReportsNoArcPattern() =
+        check("fusion: abnormal current + normal sound says no arc pattern detected") {
+            expect(fuse(reading(field = 20.0)), Fusion.Outcome.CURRENT_ABNORMAL)
+        }
+
+    fun fusionMovedIsUnreliableButKeepsCriticalGuidance() =
+        check("fusion: a moved phone is unreliable, and a critical rule warning is not dropped") {
+            val a = fuse(reading(arc = 0.5), ai = 0.9f, motion = 0.6)
+            expect(a, Fusion.Outcome.UNRELIABLE)
+                ?: when {
+                    a.strength != Fusion.Strength.LOW -> "unreliable rated ${a.strength}"
+                    a.conflicts.none { "Arcing" in it } -> "arcing warning not mentioned: ${a.conflicts}"
+                    a.whatToDo.none { "loose connection" in it.text } -> "arcing guidance dropped"
+                    else -> null
+                }
+        }
+
+    fun fusionCurrentOnIsolatedSurvivesMovement() =
+        check("fusion: current on a switched-off circuit is never downgraded") {
+            expect(fuse(reading(isolated = true), motion = 0.6), Fusion.Outcome.CURRENT_ON_ISOLATED)
+        }
+
+    fun fusionArcSoundWithoutCurrentIsNotFromCable() =
+        check("fusion: arc-like sound with no current is not attributed to the cable") {
+            val c = Circuit("c1", "Spare", baseline = baseline(live = 0.04))
+            expect(fuse(reading(live = 0.04), ai = 0.99f, circuit = c), Fusion.Outcome.SOUND_NOT_FROM_CABLE)
+        }
+
+    fun fusionNeverClaimsSafety() = check("fusion: no result claims a wire is safe or proven") {
+        val banned = listOf("is safe", "is unsafe", "proven", "guaranteed", "no fault")
+        Fusion.Outcome.values().firstNotNullOfOrNull { o ->
+            val text = (o.title + " " + o.summary).lowercase()
+            banned.firstOrNull { it in text }?.let { "${o.name} says \"$it\"" }
+        }
+    }
+
+    // ---- cable scan ----
+
+    private fun pt(
+        i: Int, strength: Double, quality: Fusion.Quality = Fusion.Quality.GOOD, audio: Boolean = true,
+    ) = CableScan.Point(
+        index = i, epochMillis = i * 1000L, lineConfidence = 0.95, loadZ = 0.0, arcZ = strength * 8,
+        aiProbability = strength.toFloat(), outcome = Fusion.Outcome.NO_ANOMALY, quality = quality,
+        motionRadPerS = 0.01, audioCaptured = audio, strength = strength,
+    )
+
+    private fun scan(vararg s: Double) = s.mapIndexed { i, v -> pt(i, v) }
+
+    fun scanFindsAConsistentZone() = check("scan: adjacent elevated points form the strongest zone") {
+        val r = CableScan.analyse(scan(0.1, 0.1, 0.15, 0.5, 0.8, 0.6, 0.15, 0.1, 0.1))
+        when {
+            r.verdict != CableScan.Verdict.ZONE_FOUND -> "verdict ${r.verdict}"
+            r.peak != 5 -> "peak at point ${r.peak}, want 5"
+            r.zoneFirst != 4 || r.zoneLast != 6 -> "zone ${r.zoneFirst}-${r.zoneLast}, want 4-6"
+            else -> null
+        }
+    }
+
+    fun scanIgnoresASingleSpike() = check("scan: one noisy point is never marked as a zone") {
+        val r = CableScan.analyse(scan(0.1, 0.1, 0.1, 0.95, 0.1, 0.1, 0.1))
+        val edge = CableScan.analyse(scan(0.95, 0.1, 0.1, 0.1, 0.1))
+        when {
+            r.verdict != CableScan.Verdict.ISOLATED_SPIKE -> "middle spike gave ${r.verdict}"
+            r.points.any { it.state == CableScan.State.STRONGEST } -> "a point was marked strongest"
+            edge.verdict == CableScan.Verdict.ZONE_FOUND -> "edge spike became a zone"
+            else -> null
+        }
+    }
+
+    fun scanIgnoresDiscardedPoints() = check("scan: points that fail quality checks take no part") {
+        val pts = scan(0.1, 0.1, 0.1, 0.1, 0.1, 0.1).toMutableList()
+        pts[2] = pt(2, 0.99, quality = Fusion.Quality.POOR)
+        pts[3] = pt(3, 0.99, audio = false)
+        val r = CableScan.analyse(pts)
+        when {
+            r.discarded != 2 -> "discarded ${r.discarded}, want 2"
+            r.verdict == CableScan.Verdict.ZONE_FOUND -> "discarded points formed a zone"
+            r.points[2].state != CableScan.State.DISCARDED -> "moved point not marked discarded"
+            else -> null
+        }
+    }
+
+    fun scanReportsUniformSignal() = check("scan: an evenly high signal is not called a zone") {
+        val r = CableScan.analyse(scan(0.6, 0.62, 0.61, 0.6, 0.63, 0.6))
+        if (r.verdict != CableScan.Verdict.UNIFORM) "verdict ${r.verdict}" else null
+    }
+
+    fun scanNeedsEnoughPoints() = check("scan: too few usable points gives no zone") {
+        val r = CableScan.analyse(scan(0.1, 0.9, 0.9))
+        if (r.verdict != CableScan.Verdict.TOO_FEW_POINTS || r.peak != null) "verdict ${r.verdict}" else null
+    }
+
+    fun scanDownweightsFairPoints() = check("scan: fair-quality points count less than good ones") {
+        val good = CableScan.analyse(scan(0.1, 0.1, 0.4, 0.4, 0.1, 0.1))
+        val fairPts = scan(0.1, 0.1, 0.4, 0.4, 0.1, 0.1).map {
+            if (it.index in 2..3) it.copy(quality = Fusion.Quality.FAIR) else it
+        }
+        val fair = CableScan.analyse(fairPts)
+        when {
+            good.verdict != CableScan.Verdict.ZONE_FOUND -> "good-quality bump gave ${good.verdict}"
+            fair.verdict == CableScan.Verdict.ZONE_FOUND -> "the same bump at fair quality still made a zone"
+            else -> null
+        }
+    }
+
+    fun scanStrengthIsBounded() = check("scan: point strength is 0 at normal and 1 at critical") {
+        val t = Thresholds.DEFAULT
+        when {
+            !near(CableScan.strengthOf(0.0, 0f, t), 0.0) -> "normal gave ${CableScan.strengthOf(0.0, 0f, t)}"
+            !near(CableScan.strengthOf(t.criticalZ * 3, 1f, t), 1.0) -> "critical not capped at 1"
+            !near(CableScan.strengthOf(-5.0, null, t), 0.0) -> "below-normal sound gave a positive strength"
+            else -> null
+        }
+    }
+
+    fun scanStoreRoundTrips() = check("scan store round-trips a session") {
+        val store = ScanStore(MemoryFileSystem())
+        val pts = scan(0.1, 0.5).toMutableList().also { it[1] = it[1].copy(aiProbability = null, motionRadPerS = null) }
+        val s = ScanStore.Session("c1", "Kitchen\tcircuit", 42L, pts)
+        store.save("b1", s)
+        val back = store.list("b1", "c1").singleOrNull()
+        when {
+            back == null -> "nothing loaded"
+            back.points != pts -> "points differ: ${back.points}"
+            back.epochMillis != 42L -> "time ${back.epochMillis}"
+            else -> null
+        }
+    }
+
+    // ---- room 3D scan ----
+
+    private fun room(
+        id: Int, x: Double, y: Double = 0.0, z: Double = 0.0, contrast: Double = 3.0,
+        outcome: Fusion.Outcome = Fusion.Outcome.NO_ANOMALY, quality: Fusion.Quality = Fusion.Quality.GOOD,
+    ) = RoomMap.Point(
+        id = id, position = RoomMap.Vec3(x, y, z), epochMillis = id.toLong(),
+        lineConfidence = contrast / (contrast + 9.0), fieldAmplitudeUt = 0.5, referenceFieldUt = 0.1,
+        currentA = null, arcZ = 0.0, aiProbability = 0.1f, outcome = outcome,
+        strength = Fusion.Strength.MODERATE, quality = quality, why = listOf("reason one", "reason two"),
+    )
+
+    private fun quietRoom() = (0 until 6).map { room(it, x = it * 1.0) }
+
+    fun roomOneReadingNeverMakesAZone() = check("room: one anomaly reading never makes a red zone") {
+        val pts = quietRoom() + room(10, x = 2.2, contrast = 40.0, outcome = Fusion.Outcome.POSSIBLE_ARCING)
+        val m = RoomMap.build(pts, emptyList())
+        when {
+            m.zones.isNotEmpty() -> "zone from a single reading"
+            pts.last().state != RoomMap.State.POSSIBLE_ANOMALY -> "reading not marked as a possible anomaly"
+            "single reading" !in m.message -> "message: ${m.message}"
+            else -> null
+        }
+    }
+
+    fun roomNearbyAnomaliesFormAZone() = check("room: two nearby anomaly readings form a zone, far apart do not") {
+        val near = quietRoom() + room(10, x = 2.2, outcome = Fusion.Outcome.POSSIBLE_ARCING) +
+            room(11, x = 2.5, outcome = Fusion.Outcome.ELECTRICAL_ANOMALY)
+        val far = quietRoom() + room(10, x = 0.2, outcome = Fusion.Outcome.POSSIBLE_ARCING) +
+            room(11, x = 4.8, outcome = Fusion.Outcome.POSSIBLE_ARCING)
+        val a = RoomMap.build(near, emptyList())
+        val b = RoomMap.build(far, emptyList())
+        when {
+            a.zones.size != 1 || a.zones[0].pointIds.toSet() != setOf(10, 11) -> "near: ${a.zones.map { it.pointIds }}"
+            b.zones.isNotEmpty() -> "far readings joined into a zone"
+            else -> null
+        }
+    }
+
+    fun roomMovedReadingsTakeNoPart() = check("room: readings from a moved phone take no part") {
+        val pts = quietRoom() +
+            room(10, x = 2.2, outcome = Fusion.Outcome.POSSIBLE_ARCING, quality = Fusion.Quality.POOR) +
+            room(11, x = 2.4, outcome = Fusion.Outcome.POSSIBLE_ARCING, quality = Fusion.Quality.POOR)
+        val m = RoomMap.build(pts, emptyList())
+        when {
+            m.zones.isNotEmpty() -> "moved readings formed a zone"
+            pts.last().state != RoomMap.State.DISCARDED -> "moved reading not discarded"
+            10 in m.smoothed -> "moved reading entered the heat map"
+            else -> null
+        }
+    }
+
+    fun roomNeedsEnoughPoints() = check("room: too few readings says the map is not reliable") {
+        val m = RoomMap.build(quietRoom().take(4), emptyList())
+        if (m.enough || "Not enough measurements" !in m.message) "enough=${m.enough}: ${m.message}" else null
+    }
+
+    fun roomActivityScaleMatchesThresholds() = check("room: activity is 0 at 8x, 1 at 60x, elevated from ~13x") {
+        when {
+            !near(RoomMap.activityOf(8.0), 0.0) -> "8x gave ${RoomMap.activityOf(8.0)}"
+            !near(RoomMap.activityOf(60.0), 1.0) -> "60x gave ${RoomMap.activityOf(60.0)}"
+            RoomMap.activityOf(13.5) < RoomMap.ELEVATED_AT -> "13.5x (flowing) is below elevated"
+            RoomMap.activityOf(7.0) != 0.0 -> "no-current reading has activity"
+            else -> null
+        }
+    }
+
+    fun roomHeatStaysLocal() = check("room: heat does not spread beyond a hand-span or two") {
+        val pts = listOf(room(1, x = 0.0, contrast = 60.0))
+        val (_, weightFar) = RoomMap.fieldAt(RoomMap.Vec3(2.0, 0.0, 0.0), pts)
+        val (valueNear, weightNear) = RoomMap.fieldAt(RoomMap.Vec3(0.1, 0.0, 0.0), pts)
+        when {
+            weightFar != 0.0 -> "a point 2 m away still carries weight $weightFar"
+            weightNear <= 0.0 || !near(valueNear, 1.0) -> "near value $valueNear weight $weightNear"
+            else -> null
+        }
+    }
+
+    fun roomPathJoinsOnlyNearbyStrongPoints() = check("room: the inferred path joins only nearby strong points") {
+        val pts = quietRoom() + room(10, x = 0.0, z = 1.0, contrast = 50.0) + room(11, x = 1.0, z = 1.0, contrast = 50.0) +
+            room(12, x = 5.0, z = 1.0, contrast = 50.0)
+        val m = RoomMap.build(pts, emptyList())
+        if (m.path.size != 1) "path has ${m.path.size} edges, want 1" else null
+    }
+
+    fun roomCoverageCountsSurfaceNearPoints() = check("room: coverage is the surface share near a reading") {
+        fun square(side: Double) = RoomMap.Plane("p", false, listOf(
+            RoomMap.Vec3(0.0, 0.0, 0.0), RoomMap.Vec3(side, 0.0, 0.0),
+            RoomMap.Vec3(side, 0.0, side), RoomMap.Vec3(0.0, 0.0, side)))
+        val p = listOf(room(1, x = 0.5, z = 0.5))
+        val small = RoomMap.coverageOf(listOf(square(1.0)), p) ?: -1.0
+        val big = RoomMap.coverageOf(listOf(square(4.0)), p) ?: -1.0
+        when {
+            small < 0.99 -> "1 m square around a point covered $small"
+            big <= 0.0 || big >= 0.3 -> "4 m square covered $big"
+            RoomMap.coverageOf(emptyList(), p) != null -> "coverage without surfaces"
+            else -> null
+        }
+    }
+
+    fun roomStoreRoundTrips() = check("room store round-trips a scan") {
+        val store = RoomStore(MemoryFileSystem())
+        val plane = RoomMap.Plane("wall-1", true, listOf(RoomMap.Vec3(0.0, 0.0, 0.0), RoomMap.Vec3(1.0, 0.0, 0.0),
+            RoomMap.Vec3(1.0, 2.0, 0.0)))
+        val pts = listOf(room(1, x = 0.25, y = 1.5), room(2, x = -0.75, contrast = 40.0,
+            outcome = Fusion.Outcome.POSSIBLE_ARCING).copy(aiProbability = null, referenceFieldUt = null, currentA = 4.2))
+        store.save(RoomStore.Session("r1", "Bedroom", 99L, listOf(plane), pts))
+        val back = store.list().singleOrNull()
+        when {
+            back == null -> "nothing loaded"
+            back.points != pts -> "points differ: ${back.points} vs $pts"
+            back.planes != listOf(plane) -> "planes differ"
+            back.name != "Bedroom" -> "name ${back.name}"
+            else -> null
+        }
     }
 }

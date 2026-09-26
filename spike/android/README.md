@@ -12,18 +12,18 @@ here are checked rather than hoped for.
 
 | Layer | Compiles | Tested |
 |---|---|---|
-| `dsp/` | ✅ | ✅ 13 checks against golden vectors from the Python spike |
-| `domain/` | ✅ | ✅ 42 checks on rules, thresholds, calibration, stats, store and classifier |
+| `dsp/` | ✅ | ✅ 14 checks against golden vectors from the Python spike, including the arc model's features on real iQOO captures |
+| `domain/` | ✅ | ✅ 71 checks on rules, thresholds, calibration, stats, store, classifier, motion, fusion, cable scan and room map |
 | `sensor/` | ✅ | ❌ needs hardware — first run is on the loaner |
 | `ui/` | ✅ | ❌ no instrumentation tests |
 | `data/` | ✅ | ❌ one file over `Context` |
 
 ```bash
-./gradlew clean assembleDebug testDebugUnitTest    # BUILD SUCCESSFUL, 9.1 MB APK
-./tools/verify.sh                                   # 55/55, no Android SDK needed
+./gradlew clean assembleDebug testDebugUnitTest    # BUILD SUCCESSFUL, 26 MB APK (LiteRT + ARCore native libs)
+./tools/verify.sh                                   # 85/85, no Android SDK needed
 ```
 
-The whole app compiles and packages. **55 of 55 logic checks pass.** What remains
+The whole app compiles and packages. **85 of 85 logic checks pass.** What remains
 unverified is behaviour that only a phone can show: whether the magnetometer
 delivers a usable rate, what the real noise floor is, whether the field deflects at
 3 cm, and whether `UNPROCESSED` audio survives the device's chain. Those are the
