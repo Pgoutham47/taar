@@ -147,7 +147,7 @@ class Store(private val fs: FileSystem) {
             esc(r.circuitId), r.epochMillis.toString(), r.fieldAmplitudeUt.toString(),
             r.lineConfidence.toString(), r.arcModulationIndex.toString(),
             r.fieldEstimateUsable.toString(), label?.name ?: "",
-            r.lineContrast.toString(),
+            r.lineContrast.toString(), r.supplyIsolated.toString(),
         ).joinToString(SEP))
         fs.write(readingsPath(installationId), sb.toString())
     }
@@ -171,6 +171,8 @@ class Store(private val fs: FileSystem) {
                     arcModulationIndex = f[4].toDouble(),
                     fieldEstimateUsable = f[5].toBoolean(),
                     lineContrast = f.getOrNull(7)?.toDoubleOrNull() ?: 0.0,
+                    // Optional trailing column: older v2 files simply lack it.
+                    supplyIsolated = f.getOrNull(8)?.toBoolean() ?: false,
                 ),
                 label = f[6].takeIf { it.isNotEmpty() }?.let { runCatching { Status.valueOf(it) }.getOrNull() },
             )

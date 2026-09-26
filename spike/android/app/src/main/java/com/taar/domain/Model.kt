@@ -65,6 +65,8 @@ data class Reading(
     val arcModulationIndex: Double,
     /** False when the sine fit was ill-conditioned; the amplitude is not usable. */
     val fieldEstimateUsable: Boolean = true,
+    /** The technician said the circuit's supply was switched off for this capture. */
+    val supplyIsolated: Boolean = false,
 )
 
 /**

@@ -23,8 +23,10 @@ object DomainChecks {
         uncalibratedCircuitReportsNoAmperes(),
         healthyReadingRaisesNothing(),
         arcingIsCriticalAndRankedFirst(),
-        deadCircuitIsReported(),
-        unexpectedlyLiveOutranksDead(),
+        switchingALoadOffIsNotAFault(),
+        switchingALoadOnIsNotAFault(),
+        currentOnASwitchedOffCircuitIsCritical(),
+        unclearSignalOnASwitchedOffCircuitWarns(),
         overloadAndHighLoadAreMutuallyExclusive(),
         unusableFieldDoesNotProduceALoadDiagnosis(),
         storeRoundTripsAnInstallation(),
@@ -42,6 +44,7 @@ object DomainChecks {
         ordinaryArcVariationDoesNotWarn(),
         aRealArcSignatureStillWarns(),
         liveThresholdSeparatesTheMeasuredPopulations(),
+        storeRoundTripsSupplyIsolated(),
     )
 
     private fun check(name: String, block: () -> String?): Result =
@@ -155,6 +158,7 @@ object DomainChecks {
 
     private fun reading(
         field: Double = 10.0, arc: Double = 0.02, live: Double = 0.95, usable: Boolean = true,
+        isolated: Boolean = false,
     ) = Reading(
         circuitId = "c1",
         epochMillis = 0L,
@@ -162,6 +166,7 @@ object DomainChecks {
         lineConfidence = live,
         arcModulationIndex = arc,
         fieldEstimateUsable = usable,
+        supplyIsolated = isolated,
     )
 
     fun metricsNeedABaseline() = check("metrics refuse without a sufficient baseline") {
@@ -217,23 +222,55 @@ object DomainChecks {
         }
     }
 
-    fun deadCircuitIsReported() = check("a circuit that lost mains is reported") {
-        val c = Circuit("c1", "Lights", baseline = baseline())
-        val (ranked, _) = diagnose(c, reading(live = 0.001, field = 0.01))
-        if (ranked.none { it.fault.id == "circuit_dead" })
-            "raised ${ranked.map { it.fault.id }}" else null
-    }
-
-    fun unexpectedlyLiveOutranksDead() = check("unexpectedly live is critical") {
-        val c = Circuit("c1", "Spare", baseline = baseline(live = 0.002))
-        val (ranked, status) = diagnose(c, reading(live = 0.98))
+    fun switchingALoadOffIsNotAFault() = check("switching a load off is not a fault") {
+        // Reference taken with the kettle running, reading taken after it stopped.
+        val c = Circuit("c1", "Kettle", baseline = baseline(live = 0.83))
+        val (ranked, status) = diagnose(c, reading(live = 0.04))
         when {
-            ranked.none { it.fault.id == "unexpectedly_live" } ->
-                "raised ${ranked.map { it.fault.id }}"
-            status != Status.CRITICAL -> "status $status"
+            ranked.isNotEmpty() -> "raised ${ranked.map { it.fault.id }}"
+            status != Status.HEALTHY -> "status $status"
             else -> null
         }
     }
+
+    /**
+     * The kettle regression. Reference with the kettle off, reading with it on:
+     * the old rules called this a back-feed and marked it CRITICAL.
+     */
+    fun switchingALoadOnIsNotAFault() = check("switching a load on is not a fault") {
+        val c = Circuit("c1", "Kettle", baseline = baseline(live = 0.20))
+        val (ranked, status) = diagnose(c, reading(live = 0.83))
+        when {
+            ranked.isNotEmpty() -> "raised ${ranked.map { it.fault.id }}"
+            status != Status.HEALTHY -> "status $status"
+            else -> null
+        }
+    }
+
+    fun currentOnASwitchedOffCircuitIsCritical() =
+        check("current on a circuit the technician switched off is critical") {
+            val c = Circuit("c1", "Spare", baseline = baseline(live = 0.95))
+            val (ranked, status) = diagnose(c, reading(live = 0.83, isolated = true))
+            when {
+                ranked.firstOrNull()?.fault?.id != "unexpectedly_live" ->
+                    "raised ${ranked.map { it.fault.id }}"
+                status != Status.CRITICAL -> "status $status"
+                else -> null
+            }
+        }
+
+    fun unclearSignalOnASwitchedOffCircuitWarns() =
+        check("an unclear signal on a switched-off circuit warns, and silence does not") {
+            val c = Circuit("c1", "Spare", baseline = baseline())
+            // 10x contrast is 10/19 = 0.53, inside the unclear band.
+            val unclear = diagnose(c, reading(live = 0.53, isolated = true)).first.map { it.fault.id }
+            val quiet = diagnose(c, reading(live = 0.04, isolated = true)).first.map { it.fault.id }
+            when {
+                "isolation_unclear" !in unclear -> "unclear signal raised $unclear"
+                quiet.isNotEmpty() -> "a quiet isolated circuit raised $quiet"
+                else -> null
+            }
+        }
 
     fun overloadAndHighLoadAreMutuallyExclusive() =
         check("overload and high load never fire together") {
@@ -491,4 +528,13 @@ object DomainChecks {
                 else -> null
             }
         }
+
+    fun storeRoundTripsSupplyIsolated() = check("store round-trips the supply-off flag") {
+        val store = Store(MemoryFileSystem())
+        store.appendReading("b", reading(isolated = true))
+        store.appendReading("b", reading(isolated = false))
+        val back = store.loadReadings("b").map { it.reading.supplyIsolated }
+        if (back != listOf(true, false)) "read back $back" else null
+    }
+
 }

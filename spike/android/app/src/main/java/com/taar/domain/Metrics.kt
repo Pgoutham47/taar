@@ -21,18 +21,19 @@ data class Metrics(
     val impliedCurrentA: Double?,
     /** Raw line confidence, in [0, 1]. */
     val lineConfidence: Double,
-    /** Baseline line confidence, for deciding whether a dead circuit is unexpected. */
-    val baselineLineConfidence: Double,
     /** False when the field amplitude is not usable and load rules must be skipped. */
     val fieldUsable: Boolean,
+    /**
+     * The technician said this circuit's supply is switched off. Only the person at
+     * the board knows this; the phone senses current, not voltage, so it cannot
+     * tell an isolated circuit from a live one with nothing switched on.
+     */
+    val supplyIsolated: Boolean = false,
 ) {
     val lineState: LineState get() = LineState.of(lineConfidence)
 
     /** Current is flowing now. */
     val isLive: Boolean get() = lineState == LineState.FLOWING
-
-    /** Was live when the baseline was taken, so being dead now is a change. */
-    val wasLive: Boolean get() = LineState.of(baselineLineConfidence) == LineState.FLOWING
 
     companion object {
         /**
@@ -81,6 +82,7 @@ data class Metrics(
         const val MIN_FIELD_SPREAD_UT = 0.15
         const val MIN_ARC_SPREAD = 0.010
 
+
         fun derive(reading: Reading, circuit: Circuit): Metrics? {
             val baseline = circuit.baseline ?: return null
             if (!baseline.isSufficient) return null
@@ -105,8 +107,8 @@ data class Metrics(
                 loadVsRating = vsRating,
                 impliedCurrentA = current,
                 lineConfidence = reading.lineConfidence,
-                baselineLineConfidence = baseline.medianLineConfidence,
                 fieldUsable = reading.fieldEstimateUsable,
+                supplyIsolated = reading.supplyIsolated,
             )
         }
     }

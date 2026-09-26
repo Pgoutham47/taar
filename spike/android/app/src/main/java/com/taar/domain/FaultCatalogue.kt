@@ -40,22 +40,6 @@ object FaultCatalogue {
 
     val faults: List<Fault> = listOf(
         Fault(
-            id = "circuit_dead",
-            label = "Circuit not live",
-            labelTe = "సర్క్యూట్ లో కరెంట్ లేదు",
-            action = "No mains detected. If you expected this circuit to be off, " +
-                "this confirms it — but confirm with a contact tester before working on it.",
-            actionTe = "కరెంట్ కనిపించలేదు. పని మొదలుపెట్టే ముందు టెస్టర్‌తో మళ్ళీ చూడండి.",
-            severity = Status.WARNING,
-            priority = 90,
-            evaluate = { m, _ ->
-                listOf(
-                    Evidence("no 50 Hz component now (${fmt(m.lineConfidence)})", !m.isLive),
-                    Evidence("was live at baseline (${fmt(m.baselineLineConfidence)})", m.wasLive),
-                )
-            },
-        ),
-        Fault(
             id = "arcing",
             label = "Arcing / loose connection",
             labelTe = "ఆర్సింగ్ / వదులైన కనెక్షన్",
@@ -68,7 +52,7 @@ object FaultCatalogue {
             evaluate = { m, t ->
                 listOf(
                     Evidence("arc modulation ${fmt(m.arcZ)} MAD above baseline", m.arcZ >= t.warningZ),
-                    Evidence("circuit is live", m.isLive),
+                    Evidence("current flowing", m.isLive),
                 )
             },
         ),
@@ -108,18 +92,38 @@ object FaultCatalogue {
         ),
         Fault(
             id = "unexpectedly_live",
-            label = "Circuit live when it should not be",
-            labelTe = "ఆఫ్ చేసినా కరెంట్ ఉంది",
-            action = "Mains is present on a circuit recorded as dead. Stop. There may be a " +
-                "back-feed or a mislabelled breaker. Do not work on this circuit.",
-            actionTe = "ఆఫ్ అని రికార్డ్ అయిన సర్క్యూట్‌లో కరెంట్ ఉంది. ఆపండి — " +
-                "బ్రేకర్ లేబుల్ తప్పు కావచ్చు. ఈ సర్క్యూట్ మీద పని చేయవద్దు.",
+            label = "Current on a circuit you switched off",
+            labelTe = "ఆఫ్ చేసిన సర్క్యూట్‌లో కరెంట్ ప్రవహిస్తోంది",
+            action = "You said this circuit's supply is off, but current is flowing in the " +
+                "cable. Stop. The breaker may be mislabelled or there may be a back-feed. " +
+                "Do not work on this circuit.",
+            actionTe = "ఈ సర్క్యూట్ సప్లై ఆఫ్ అని చెప్పారు, కానీ కేబుల్‌లో కరెంట్ ప్రవహిస్తోంది. " +
+                "ఆపండి — బ్రేకర్ లేబుల్ తప్పు కావచ్చు లేదా బ్యాక్-ఫీడ్ ఉండవచ్చు. " +
+                "ఈ సర్క్యూట్ మీద పని చేయవద్దు.",
             severity = Status.CRITICAL,
             priority = 99,
             evaluate = { m, _ ->
                 listOf(
-                    Evidence("50 Hz present now (${fmt(m.lineConfidence)})", m.isLive),
-                    Evidence("baseline had none (${fmt(m.baselineLineConfidence)})", !m.wasLive),
+                    Evidence("current flowing now (${fmt(m.lineConfidence)})", m.isLive),
+                    Evidence("you said the supply is off", m.supplyIsolated),
+                )
+            },
+        ),
+        Fault(
+            id = "isolation_unclear",
+            label = "Can't confirm the switched-off circuit",
+            labelTe = "ఆఫ్ చేసిన సర్క్యూట్‌ను నిర్ధారించలేకపోయాం",
+            action = "You said this circuit's supply is off, but the signal is above room " +
+                "noise. Keep the phone still and measure again. Do not assume it is off.",
+            actionTe = "సప్లై ఆఫ్ అని చెప్పారు, కానీ సిగ్నల్ స్పష్టంగా లేదు. ఫోన్ కదలకుండా ఉంచి " +
+                "మళ్ళీ కొలవండి. సర్క్యూట్ ఆఫ్ అని అనుకోవద్దు.",
+            severity = Status.WARNING,
+            priority = 80,
+            evaluate = { m, _ ->
+                listOf(
+                    Evidence("signal unclear (${fmt(m.lineConfidence)})",
+                        m.lineState == LineState.UNCLEAR),
+                    Evidence("you said the supply is off", m.supplyIsolated),
                 )
             },
         ),
