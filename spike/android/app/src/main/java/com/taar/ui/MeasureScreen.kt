@@ -214,8 +214,8 @@ private fun ResultStage(
 @Composable
 private fun IndividualResults(state: TaarViewModel.UiState, reading: Reading, circuit: Circuit, startOpen: Boolean) {
     var open by rememberSaveable { mutableStateOf(startOpen) }
-    TextButton(onClick = { open = !open }) {
-        Text(if (open) "Hide individual results ▴" else "Show individual results ▾")
+    Card(Modifier.fillMaxWidth()) {
+        ExpandRow("Individual results", "Each signal on its own, before they are combined", open) { open = !open }
     }
     if (!open) return
 
@@ -393,13 +393,12 @@ private fun ProblemCard(r: RankedFault) {
 @Composable
 private fun Details(state: TaarViewModel.UiState, reading: Reading, circuit: Circuit) {
     var open by rememberSaveable { mutableStateOf(false) }
-    TextButton(onClick = { open = !open }) { Text(if (open) "Hide details ▴" else "Show details ▾") }
-    if (!open) return
-
     val metrics = Metrics.derive(reading, circuit)
     val t = state.thresholds
     Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        ExpandRow("Measurement details", "The numbers behind this result", open) { open = !open }
+        if (open) Column(Modifier.padding(start = 18.dp, end = 18.dp, bottom = 18.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Metric(
                 "Signal strength", "%.1f×".format(LineState.contrastOf(reading.lineConfidence)),
                 "How much the 50 Hz hum stands out from nearby frequencies.",
@@ -476,21 +475,17 @@ private fun Details(state: TaarViewModel.UiState, reading: Reading, circuit: Cir
 @Composable
 private fun Teach(label: Status?, onLabel: (Status) -> Unit) {
     var open by rememberSaveable { mutableStateOf(false) }
-    TextButton(onClick = { open = !open }) {
-        Text(if (open) "Teach Taar (optional) ▴" else "Teach Taar (optional) ▾")
-    }
-    if (!open) return
-
-    OutlinedCard(Modifier.fillMaxWidth(), border = BorderStroke(1.dp, TaarPalette.Grey.copy(alpha = 0.4f))) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Card(Modifier.fillMaxWidth()) {
+        ExpandRow("Teach Taar", "Optional · tell Taar whether this circuit was really OK", open) { open = !open }
+        if (open) Column(Modifier.padding(start = 18.dp, end = 18.dp, bottom = 18.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Was this circuit really OK?", style = MaterialTheme.typography.titleSmall)
             Hint(
                 "Only answer if you know from another check, such as a clamp meter or an " +
                     "electrician. Your answers tune the warning levels for this circuit.",
             )
             if (label != null) {
-                Text("✓ Saved as ${labelName(label)}", color = TaarPalette.Green,
-                    style = MaterialTheme.typography.bodyMedium)
+                Banner("Saved as ${labelName(label)}. Thank you.", Tone.SUCCESS)
             } else {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     LabelButton("Normal", TaarPalette.Green) { onLabel(Status.HEALTHY) }

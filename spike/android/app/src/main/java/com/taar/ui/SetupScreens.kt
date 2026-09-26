@@ -1,5 +1,9 @@
 package com.taar.ui
 
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.Alignment
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -47,10 +51,10 @@ fun ReferenceScreen(
             return@TaarScreen
         }
 
-        Hint(
-            "A reference is Taar's picture of 'normal' for this cable. Every measurement is " +
-                "compared with it to spot unusual load or sparking.",
-            color = MaterialTheme.colorScheme.onSurface,
+        Text(
+            "A reference is Taar's picture of normal for this cable. Every measurement is compared with it " +
+                "to spot unusual load or sparking.",
+            style = MaterialTheme.typography.bodyMedium, color = TaarPalette.Grey,
         )
 
         when {
@@ -64,52 +68,57 @@ fun ReferenceScreen(
             state.referenceJustRecorded && circuit.baseline != null -> {
                 val b = circuit.baseline
                 val seen = LineState.of(b.medianLineConfidence)
-                Card(
-                    Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = TaarPalette.GreenSurface),
-                ) {
-                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text("✓ Reference saved", style = MaterialTheme.typography.titleLarge,
-                            color = TaarPalette.Green, fontWeight = FontWeight.SemiBold)
-                        Text(
-                            "During the reference: " + when (seen) {
-                                LineState.NONE -> "no current was flowing."
-                                LineState.UNCLEAR -> "the signal was unclear."
-                                LineState.FLOWING -> "current was flowing."
-                            },
-                            style = MaterialTheme.typography.bodyMedium,
+                val ai = state.referenceAi
+                val motion = state.referenceMotion
+                val aiHeard = ai.count { it >= ArcModel.THRESHOLD }
+                val moved = motion.indices.filter { MotionCheck.level(motion[it]) == MotionCheck.Level.MOVED }
+                TaarCard(tone = Tone.SUCCESS) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        androidx.compose.material3.Icon(
+                            androidx.compose.material.icons.Icons.Filled.CheckCircle, contentDescription = null,
+                            tint = TaarPalette.Green, modifier = Modifier.size(28.dp),
                         )
-                        Hint(
-                            "Signal in each capture: " + b.lineConfidences.joinToString(" · ") {
-                                "%.0f×".format(LineState.contrastOf(it))
-                            },
-                        )
-                        AiReferenceLine(state.referenceAi)
-                        MotionReferenceLine(state.referenceMotion)
+                        Text("Reference saved", style = MaterialTheme.typography.titleLarge)
                     }
+                    Text(
+                        when (seen) {
+                            LineState.NONE -> "No current was flowing while it was recorded."
+                            LineState.UNCLEAR -> "The current signal was unclear while it was recorded."
+                            LineState.FLOWING -> "Current was flowing while it was recorded."
+                        },
+                        style = MaterialTheme.typography.bodyMedium, color = TaarPalette.Grey,
+                    )
+                    Rule()
+                    Metric("Signal", b.lineConfidences.joinToString(" · ") { times(LineState.contrastOf(it)) }, mono = false)
+                    if (ai.isNotEmpty()) Metric("Sparking (AI)", ai.joinToString(" · ") { "${(it * 100).roundToInt()}%" }, mono = false)
+                    if (motion.isNotEmpty()) Metric("Movement", motion.joinToString(" · ") {
+                        motionWord(MotionCheck.level(it))
+                    }, mono = false)
                 }
-                Button(onClick = onMeasure, modifier = Modifier.fillMaxWidth().height(56.dp)) {
-                    Text("Measure now", style = MaterialTheme.typography.titleMedium)
+                if (aiHeard > 0) {
+                    Banner("The AI heard a sparking-like sound in $aiHeard of ${ai.size} captures. If this circuit is " +
+                        "not known to be healthy, redo the reference somewhere quiet.", Tone.WARNING)
                 }
-                OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("Back to home") }
+                if (moved.isNotEmpty()) {
+                    Banner("The phone moved in capture ${moved.joinToString(", ") { "${it + 1}" }}. Every measurement " +
+                        "is compared with this reference, so redo it holding the phone still.", Tone.WARNING)
+                }
+                PrimaryButton("Measure now", onClick = onMeasure)
+                SecondaryButton("Back to home", onClick = onBack)
             }
 
             else -> {
-                Card(Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Text("Before you start", style = MaterialTheme.typography.titleSmall)
-                        Instruction(1, "Lay the phone flat on the cable, in the spot you will measure from later. Tape it if you can.")
-                        Instruction(2, "Leave the circuit as it normally is. For an appliance: plugged in, switched off.")
-                        Instruction(3, "Tap Start and don't touch the phone until it finishes.")
-                    }
+                TaarCard {
+                    SectionLabel("Before you start")
+                    Instruction(1, "Lay the phone flat on the cable, in the spot you will measure from later. Tape it if you can.")
+                    Instruction(2, "Leave the circuit as it normally is. For an appliance: plugged in, switched off.")
+                    Instruction(3, "Tap Start and don't touch the phone until it finishes.")
                 }
                 circuit.baseline?.takeIf { it.isSufficient }?.let {
-                    Hint("This replaces the reference recorded at ${time(it.recordedAtMillis)}.", color = TaarPalette.Amber)
+                    Banner("This replaces the reference recorded at ${time(it.recordedAtMillis)}.", Tone.WARNING)
                 }
                 state.error?.let { ErrorCard(it) }
-                Button(onClick = onStart, modifier = Modifier.fillMaxWidth().height(56.dp)) {
-                    Text("Start · about 10 seconds", style = MaterialTheme.typography.titleMedium)
-                }
+                PrimaryButton("Start · about 10 seconds", onClick = onStart)
             }
         }
     }
@@ -270,45 +279,4 @@ private fun summary(confidences: List<Double>): String {
         confidences.joinToString(" · ") { "%.0f×".format(LineState.contrastOf(it)) } + ")"
 }
 
-/**
- * What the on-device model heard during the reference. A reference is meant to be
- * healthy, so sparking heard here is worth saying before it becomes "normal".
- */
-@Composable
-private fun AiReferenceLine(scores: List<Float>) {
-    if (scores.isEmpty()) return
-    val arcLike = scores.count { it >= ArcModel.THRESHOLD }
-    Hint(
-        "On-device AI, sparking sound in each capture: " +
-            scores.joinToString(" · ") { "${(it * 100).roundToInt()}%" },
-        color = if (arcLike == 0) TaarPalette.Green else TaarPalette.Amber,
-    )
-    if (arcLike > 0) {
-        Hint(
-            "The AI heard a sparking-like sound in $arcLike of ${scores.size} captures. If this " +
-                "circuit is not known to be healthy, redo the reference somewhere quiet.",
-            color = TaarPalette.Amber,
-        )
-    }
-}
 
-/**
- * A reference is what every later reading is compared with, so one taken while
- * the phone was moving quietly spoils all of them. Said here, while redoing it is
- * one tap away.
- */
-@Composable
-private fun MotionReferenceLine(motion: List<Double>) {
-    if (motion.isEmpty()) return
-    val moved = motion.indices.filter { MotionCheck.level(motion[it]) == MotionCheck.Level.MOVED }
-    if (moved.isEmpty()) {
-        Hint("Phone movement in each capture: " + motion.joinToString(" · ") { motionWord(MotionCheck.level(it)) },
-            color = TaarPalette.Green)
-    } else {
-        Hint(
-            "The phone moved in capture ${moved.joinToString(", ") { "${it + 1}" }} of ${motion.size}. " +
-                "Every measurement is compared with this reference, so redo it holding the phone still.",
-            color = TaarPalette.Amber,
-        )
-    }
-}

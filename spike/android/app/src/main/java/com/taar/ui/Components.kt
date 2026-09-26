@@ -33,6 +33,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -493,16 +495,17 @@ fun times(contrast: Double): String =
 
 /** A label and a value on one line, value in monospace, an optional line under it. */
 @Composable
-fun Metric(label: String, value: String, explain: String? = null) {
+fun Metric(label: String, value: String, explain: String? = null, mono: Boolean = true) {
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Row(
             Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(Space.m),
             verticalAlignment = Alignment.Top,
         ) {
-            Text(label, style = MaterialTheme.typography.bodyMedium, color = TaarPalette.Grey, modifier = Modifier.weight(1f))
-            Text(value, style = MaterialTheme.typography.bodyMedium.merge(TextStyle(fontFamily = FontFamily.Monospace)),
-                color = TaarPalette.Text)
+            Text(label, style = MaterialTheme.typography.bodyMedium, color = TaarPalette.Grey, maxLines = 1,
+                modifier = Modifier.weight(1f))
+            Text(value, style = if (mono) MaterialTheme.typography.bodyMedium.merge(TextStyle(fontFamily = FontFamily.Monospace))
+                else MaterialTheme.typography.bodyMedium, color = TaarPalette.Text)
         }
         explain?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = TaarPalette.Faint) }
     }
@@ -561,5 +564,26 @@ fun OutlinedButton(
     content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit,
 ) = androidx.compose.material3.OutlinedButton(
     onClick = onClick, modifier = modifier, enabled = enabled,
-    shape = MaterialTheme.shapes.medium, border = BorderStroke(1.dp, TaarPalette.Outline), content = content,
+    shape = MaterialTheme.shapes.medium, border = BorderStroke(1.dp, TaarPalette.Outline),
+    colors = ButtonDefaults.outlinedButtonColors(contentColor = TaarPalette.Text), content = content,
 )
+
+/** The header of a collapsible card: title, one line of description, and an arrow. */
+@Composable
+fun ExpandRow(title: String, subtitle: String, open: Boolean, onToggle: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clickable(onClick = onToggle).padding(horizontal = 18.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Space.m),
+    ) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(title, style = MaterialTheme.typography.titleMedium)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = TaarPalette.Grey)
+        }
+        Icon(
+            if (open) Icons.Filled.KeyboardArrowUp
+            else Icons.Filled.KeyboardArrowDown,
+            contentDescription = if (open) "Collapse" else "Expand", tint = TaarPalette.Grey,
+        )
+    }
+}

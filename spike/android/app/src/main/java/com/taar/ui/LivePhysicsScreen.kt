@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -14,7 +15,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -87,10 +87,8 @@ fun LivePhysicsScreen(
         Controls(live, onStart, onPause, onStop, onReset)
 
         if (frame == null) {
-            Hint(
-                "Tap Start. Taar captures 3 seconds at a time, exactly as it does when measuring, and " +
-                    "shows each step from the raw sensor signals to the result. Nothing is recorded or saved.",
-            )
+            Hint("Each step from the raw sensor signals to the result is shown below once it starts. " +
+                "Nothing is recorded or saved.")
             if (circuit?.baseline?.isSufficient != true) {
                 Hint("No reference for this circuit yet: signals will show, but there is no result to compare " +
                     "against. Record a reference from Home for the full chain.", color = TaarPalette.Amber)
@@ -99,12 +97,11 @@ fun LivePhysicsScreen(
         }
         val view = frame.reading.view
 
+        // Short labels so the three always fit on one line.
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(selected = folded, onClick = { folded = !folded },
-                label = { Text(if (folded) "Magnetic: processed" else "Magnetic: raw") })
-            FilterChip(selected = showReference, onClick = { showReference = !showReference },
-                label = { Text("Reference") })
-            FilterChip(selected = showAi, onClick = { showAi = !showAi }, label = { Text("AI details") })
+            ToggleChip(if (folded) "Folded view" else "Raw view", folded) { folded = !folded }
+            ToggleChip("Reference", showReference) { showReference = !showReference }
+            ToggleChip("AI info", showAi) { showAi = !showAi }
         }
 
         MagneticPanel(frame, view, circuit, folded, showReference)
@@ -120,49 +117,52 @@ fun LivePhysicsScreen(
 
 // ---- status and controls ----
 
-private data class StatusLook(val dot: String, val label: String, val colour: Color)
+private data class StatusLook(val label: String, val tone: Tone)
 
 private fun statusOf(frame: TaarViewModel.LiveFrame?): StatusLook = when (frame?.fusion?.outcome?.tone) {
-    null -> if (frame == null) StatusLook("⚪", "READY", TaarPalette.Grey)
-    else StatusLook("⚪", "NO REFERENCE", TaarPalette.Grey)
-    Fusion.Tone.NORMAL -> StatusLook("🟢", "NORMAL", TaarPalette.Green)
-    Fusion.Tone.ADVISORY, Fusion.Tone.WARNING -> StatusLook("🟡", "POSSIBLE ANOMALY", TaarPalette.Yellow)
-    Fusion.Tone.CRITICAL -> StatusLook("🔴", "ANOMALY DETECTED", TaarPalette.Red)
-    Fusion.Tone.UNRELIABLE -> StatusLook("⚪", "UNRELIABLE", TaarPalette.Grey)
+    null -> if (frame == null) StatusLook("Ready", Tone.NEUTRAL) else StatusLook("No reference", Tone.NEUTRAL)
+    Fusion.Tone.NORMAL -> StatusLook("Normal", Tone.SUCCESS)
+    Fusion.Tone.ADVISORY, Fusion.Tone.WARNING -> StatusLook("Possible anomaly", Tone.WARNING)
+    Fusion.Tone.CRITICAL -> StatusLook("Anomaly detected", Tone.DANGER)
+    Fusion.Tone.UNRELIABLE -> StatusLook("Unreliable", Tone.NEUTRAL)
 }
 
 @Composable
 private fun StatusBanner(frame: TaarViewModel.LiveFrame?, live: TaarViewModel.Live) {
     val look = statusOf(frame)
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text("${look.dot} ${look.label}", style = MaterialTheme.typography.headlineMedium,
-                color = look.colour, fontWeight = FontWeight.Bold)
-            frame?.fusion?.let {
-                Text(it.outcome.title, style = MaterialTheme.typography.titleMedium)
-            }
-            if (frame != null && frame.fusion == null) {
-                Hint("Record a reference for this circuit to get a result. The signals below are live.")
-            }
+    TaarCard(tone = look.tone) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            StatusPill(look.label, look.tone)
+            Spacer(Modifier.weight(1f))
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Box(Modifier.size(8.dp).clip(CircleShape).background(
                     when {
                         live.listening -> TaarPalette.Red
                         live.running -> TaarPalette.Yellow
-                        else -> TaarPalette.Grey
+                        else -> TaarPalette.Faint
                     },
                 ))
                 Text(
                     when {
-                        live.listening -> "Capturing 3 s…"
+                        live.listening -> "Capturing"
                         live.running -> "Processing"
                         frame != null -> "Paused"
                         else -> "Stopped"
-                    } + (frame?.let { " · capture #${it.number} · updates every 3 s" } ?: ""),
+                    },
                     style = MaterialTheme.typography.labelMedium, color = TaarPalette.Grey,
                 )
             }
         }
+        Text(
+            frame?.fusion?.outcome?.title ?: if (frame == null) "Tap Start to watch the live signals"
+            else "Record a reference to get a result",
+            style = MaterialTheme.typography.headlineSmall,
+        )
+        Text(
+            if (frame == null) "Taar captures 3 seconds at a time, exactly as when measuring."
+            else "Capture #${frame.number} · updates every 3 seconds",
+            style = MaterialTheme.typography.bodySmall, color = TaarPalette.Grey,
+        )
     }
 }
 
@@ -175,15 +175,24 @@ private fun Controls(
     onReset: () -> Unit,
 ) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        if (live.running) {
-            Button(onClick = onPause, modifier = Modifier.weight(1f).height(48.dp)) { Text("Pause") }
-        } else {
-            Button(onClick = onStart, modifier = Modifier.weight(1f).height(48.dp)) {
-                Text(if (live.frame != null) "Resume" else "Start")
-            }
-        }
-        OutlinedButton(onClick = onStop, modifier = Modifier.weight(1f).height(48.dp)) { Text("Stop") }
-        OutlinedButton(onClick = onReset, modifier = Modifier.weight(1f).height(48.dp)) { Text("Reset") }
+        if (live.running) PrimaryButton("Pause", onClick = onPause, modifier = Modifier.weight(1.4f))
+        else PrimaryButton(if (live.frame != null) "Resume" else "Start", onClick = onStart, modifier = Modifier.weight(1.4f))
+        SecondaryButton("Stop", onClick = onStop, modifier = Modifier.weight(1f))
+        SecondaryButton("Reset", onClick = onReset, modifier = Modifier.weight(1f))
+    }
+}
+
+/** A compact on/off chip for the view options. */
+@Composable
+private fun ToggleChip(label: String, on: Boolean, onClick: () -> Unit) {
+    androidx.compose.material3.Surface(
+        onClick = onClick,
+        shape = CircleShape,
+        color = if (on) TaarPalette.Yellow.copy(alpha = 0.14f) else TaarPalette.Surface,
+        border = androidx.compose.foundation.BorderStroke(1.dp, if (on) TaarPalette.Yellow.copy(alpha = 0.6f) else TaarPalette.Outline),
+    ) {
+        Text(label, style = MaterialTheme.typography.labelLarge, color = if (on) TaarPalette.Yellow else TaarPalette.Grey,
+            maxLines = 1, modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp))
     }
 }
 
@@ -458,7 +467,7 @@ private fun PipelinePanel(frame: TaarViewModel.LiveFrame, view: CaptureCoordinat
         },
         "SENSOR FUSION" to (frame.fusion?.let { "${it.outcome.title} · evidence ${it.strength.name.lowercase()}" }
             ?: "Needs a reference"),
-        "RESULT" to statusOf(frame).let { "${it.dot} ${it.label}" },
+        "RESULT" to statusOf(frame).label,
     )
     // Lights the steps in order each time a new capture arrives, so the chain reads
     // as a chain; while capturing, only the first is active.
@@ -511,13 +520,12 @@ private fun WhyPanel(frame: TaarViewModel.LiveFrame) {
 
 @Composable
 private fun Panel(title: String, subtitle: String, content: @Composable () -> Unit) {
-    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors()) {
-        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(title, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold,
-                color = TaarPalette.Yellow)
-            Text(subtitle, style = MaterialTheme.typography.labelSmall, color = TaarPalette.Grey)
-            content()
+    TaarCard {
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            SectionLabel(title)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = TaarPalette.Grey)
         }
+        content()
     }
 }
 
