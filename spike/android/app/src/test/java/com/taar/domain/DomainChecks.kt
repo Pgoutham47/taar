@@ -82,7 +82,6 @@ object DomainChecks {
         roomPathJoinsOnlyNearbyStrongPoints(),
         roomCoverageCountsSurfaceNearPoints(),
         roomStoreRoundTrips(),
-        roomPlacementRoundTripsOnEverySurface(),
     )
 
     private fun check(name: String, block: () -> String?): Result =
@@ -998,22 +997,4 @@ object DomainChecks {
             else -> null
         }
     }
-
-    fun roomPlacementRoundTripsOnEverySurface() =
-        check("room: a tap on each wall lands on that wall and reads back the same") {
-            val (w, d, h) = Triple(4.0, 3.0, 2.7)
-            val planes = RoomMap.boxRoom(w, d, h)
-            RoomMap.Surface.values().firstNotNullOfOrNull { s ->
-                val p = RoomMap.place(s, 1.0, 0.3, w, d)
-                val back = RoomMap.onFace(s, p, w, d)
-                val others = RoomMap.Surface.values().filter { it != s && RoomMap.onFace(it, p, w, d) != null }
-                when {
-                    planes.size != 5 -> "box has ${planes.size} surfaces"
-                    back == null || !near(back.first, 1.0) || !near(back.second, 0.3) -> "$s read back $back"
-                    others.isNotEmpty() -> "$s point also on $others"
-                    p.x !in 0.0..w || p.y !in 0.0..h || p.z !in 0.0..d -> "$s point outside the room: $p"
-                    else -> null
-                }
-            }
-        }
 }

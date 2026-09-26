@@ -5,12 +5,11 @@ import kotlin.math.ln
 import kotlin.math.sqrt
 
 /**
- * Room Map: Taar's existing measurements placed at the points in a room where they
+ * Room 3D Scan: Taar's existing measurements placed at the 3D points where they
  * were taken, and a map of the measured electrical activity built from them.
  *
- * The room is a box the technician describes (width, depth, height), and each point
- * is placed by tapping where it is on a wall or the floor. No camera: the phone
- * measures, the technician says where.
+ * ARCore (through SceneView) finds the room's surfaces and pins each point where
+ * the technician taps; Taar's own pipeline measures there.
  *
  * A presentation layer. Each point is an ordinary capture interpreted exactly as a
  * measurement is -- [Metrics], the rules, [Fusion] -- and this file only arranges
@@ -40,7 +39,7 @@ object RoomMap {
         fun unit(): Vec3 = length().let { if (it > 0) this * (1 / it) else this }
     }
 
-    /** One surface of the room: its outline in room coordinates, metres. */
+    /** A surface ARCore found: its outline in world coordinates, metres. */
     data class Plane(val id: String, val vertical: Boolean, val polygon: List<Vec3>)
 
     enum class State { NORMAL, ELEVATED, STRONG, POSSIBLE_ANOMALY, DISCARDED }
@@ -261,60 +260,8 @@ object RoomMap {
         return c
     }
 
-    /**
-     * A box room: floor at y = 0, walls up to [heightM]. x runs along the north wall
-     * (0 to [widthM]), z from the north wall towards the south (0 to [depthM]).
-     */
-    fun boxRoom(widthM: Double, depthM: Double, heightM: Double): List<Plane> {
-        val w = widthM; val d = depthM; val h = heightM
-        fun v(x: Double, y: Double, z: Double) = Vec3(x, y, z)
-        return listOf(
-            Plane("floor", false, listOf(v(0.0, 0.0, 0.0), v(w, 0.0, 0.0), v(w, 0.0, d), v(0.0, 0.0, d))),
-            Plane("north", true, listOf(v(0.0, 0.0, 0.0), v(w, 0.0, 0.0), v(w, h, 0.0), v(0.0, h, 0.0))),
-            Plane("east", true, listOf(v(w, 0.0, 0.0), v(w, 0.0, d), v(w, h, d), v(w, h, 0.0))),
-            Plane("south", true, listOf(v(w, 0.0, d), v(0.0, 0.0, d), v(0.0, h, d), v(w, h, d))),
-            Plane("west", true, listOf(v(0.0, 0.0, d), v(0.0, 0.0, 0.0), v(0.0, h, 0.0), v(0.0, h, d))),
-        )
-    }
-
-    /** The surfaces a point can be placed on, and how a tap on each maps into the room. */
-    enum class Surface(val label: String) { NORTH("North wall"), EAST("East wall"), SOUTH("South wall"),
-        WEST("West wall"), FLOOR("Floor") }
-
-    /** Width and height of [s] as the technician sees it, facing it from inside the room. */
-    fun faceSize(s: Surface, widthM: Double, depthM: Double, heightM: Double): Pair<Double, Double> = when (s) {
-        Surface.NORTH, Surface.SOUTH -> widthM to heightM
-        Surface.EAST, Surface.WEST -> depthM to heightM
-        Surface.FLOOR -> widthM to depthM
-    }
-
-    /**
-     * A point on [s], [across] metres from its left edge and [up] metres from its
-     * bottom edge as seen from inside the room (for the floor, [up] is from the north
-     * wall), in room coordinates.
-     */
-    fun place(s: Surface, across: Double, up: Double, widthM: Double, depthM: Double): Vec3 = when (s) {
-        Surface.NORTH -> Vec3(across, up, 0.0)
-        Surface.EAST -> Vec3(widthM, up, across)
-        Surface.SOUTH -> Vec3(widthM - across, up, depthM)
-        Surface.WEST -> Vec3(0.0, up, depthM - across)
-        Surface.FLOOR -> Vec3(across, 0.0, up)
-    }
-
-    /** The inverse of [place]: where a room point sits on [s], or null if it is not on it. */
-    fun onFace(s: Surface, p: Vec3, widthM: Double, depthM: Double): Pair<Double, Double>? {
-        val e = 0.01
-        return when (s) {
-            Surface.NORTH -> if (kotlin.math.abs(p.z) < e) p.x to p.y else null
-            Surface.EAST -> if (kotlin.math.abs(p.x - widthM) < e) p.z to p.y else null
-            Surface.SOUTH -> if (kotlin.math.abs(p.z - depthM) < e) (widthM - p.x) to p.y else null
-            Surface.WEST -> if (kotlin.math.abs(p.x) < e) (depthM - p.z) to p.y else null
-            Surface.FLOOR -> if (kotlin.math.abs(p.y) < e) p.x to p.z else null
-        }
-    }
-
-    const val CAVEAT = "Measured electrical activity at the points you touched, placed on a model of the room " +
-        "you described. Not an X-ray of the walls and not a wiring diagram; it does not show whether a circuit " +
+    const val CAVEAT = "Measured electrical activity at the points you touched, placed in a camera-built model " +
+        "of the room. Not an X-ray of the walls and not a wiring diagram; it does not show whether a circuit " +
         "is safe. Where a zone is marked, further inspection is recommended."
 }
 
