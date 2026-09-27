@@ -19,3 +19,6 @@ spike/android/.kotlin/
 spike/audio/playback/
 .venv-train/
 spike/audio/model/
+
+# Vosk speech model (54 MB): fetched by spike/android/tools/get-voice-model.sh
+spike/android/app/src/main/assets/model-en-in/

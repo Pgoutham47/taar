@@ -4,6 +4,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.taar.domain.AmpCalibration
 import com.taar.domain.Baseline
+import com.taar.domain.BoardMap
+import com.taar.domain.BoardMapStore
+import com.taar.domain.LineState
+import com.taar.domain.SpokenResult
+import com.taar.domain.EnergyCost
+import com.taar.domain.VoiceCommand
 import com.taar.domain.Classifier
 import com.taar.domain.CentroidClassifier
 import com.taar.domain.CableScan
@@ -43,6 +49,8 @@ class TaarViewModel(
     private val coordinator: CaptureCoordinator,
     private val store: Store,
     private val scanStore: ScanStore,
+    private val boardMaps: BoardMapStore,
+    private val speaker: Speaker,
     private val assistant: TaarAssistant,
     /** Null when the on-device model did not load. */
     private val aiSelfCheck: ArcModel.SelfCheck? = null,
@@ -52,7 +60,8 @@ class TaarViewModel(
     enum class CaptureKind { REFERENCE, MEASURE, CALIBRATE_OFF, CALIBRATE_ON }
 
     /** A capture in progress: capture [step] of [total]. */
-    data class CaptureProgress(val kind: CaptureKind, val step: Int, val total: Int)
+    /** [settling]: the second after the tap, before recording starts, while the phone steadies. */
+    data class CaptureProgress(val kind: CaptureKind, val step: Int, val total: Int, val settling: Boolean = false)
 
     /** One capture as the live view shows it: the raw signals and every result derived from them. */
     data class LiveFrame(
@@ -160,6 +169,17 @@ class TaarViewModel(
         val live: Live = Live(),
         val assistant: Assistant = Assistant(),
         val chat: List<ChatMessage> = emptyList(),
+        /** Geiger mode is an extra, off until switched on in Tools. */
+        val geigerEnabled: Boolean = false,
+        /** Board Map is an extra too, off until switched on in Tools. */
+        val boardMapEnabled: Boolean = false,
+        /** The selected board's map: where each circuit's dot sits, and what it shows. */
+        val boardMap: BoardMap.Map = BoardMap.Map(),
+        val boardDots: Map<String, BoardMap.Dot> = emptyMap(),
+        /** Rupees per unit, for the cost of a calibrated reading. One rate for the whole home. */
+        val tariffRate: Double = EnergyCost.DEFAULT_RATE,
+        /** How many hours a day the selected circuit's load runs, as the technician set it. */
+        val costHours: Double = EnergyCost.DEFAULT_HOURS,
     ) {
         val busy: Boolean get() = capture != null || scan?.running == true || live.running
     }
@@ -218,9 +238,108 @@ class TaarViewModel(
                 installation = installation,
                 selectedCircuitId = circuitId,
                 phoneCheck = loadPhoneCheck(),
+                geigerEnabled = store.loadSetting(KEY_GEIGER) == "true",
+                tariffRate = store.loadSetting(KEY_RATE)?.toDoubleOrNull()?.takeIf { r -> r > 0 } ?: EnergyCost.DEFAULT_RATE,
+                costHours = hoursFor(circuitId),
+                boardMapEnabled = store.loadSetting(KEY_BOARD_MAP) == "true",
             )
         }
         refreshThresholds()
+    }
+
+    // ---- cost ----
+
+    private fun hoursFor(circuitId: String?): Double =
+        circuitId?.let { store.loadSetting("$KEY_HOURS$it")?.toDoubleOrNull() } ?: EnergyCost.DEFAULT_HOURS
+
+    fun setCostHours(hours: Double) {
+        val id = _state.value.selectedCircuitId ?: return
+        if (hours <= 0 || hours > 24) return
+        store.saveSetting("$KEY_HOURS$id", hours.toString())
+        update { it.copy(costHours = hours) }
+    }
+
+    fun setTariffRate(rate: Double) {
+        if (rate <= 0 || rate > 100) return
+        store.saveSetting(KEY_RATE, rate.toString())
+        update { it.copy(tariffRate = rate) }
+    }
+
+    fun setGeigerEnabled(on: Boolean) {
+        store.saveSetting(KEY_GEIGER, on.toString())
+        update { it.copy(geigerEnabled = on) }
+    }
+
+    fun setBoardMapEnabled(on: Boolean) {
+        store.saveSetting(KEY_BOARD_MAP, on.toString())
+        update { it.copy(boardMapEnabled = on) }
+    }
+
+    // ---- board map ----
+
+    /** Loads the selected board's map, and each circuit's dot from its latest result or reading. */
+    fun openBoardMap() {
+        val inst = _state.value.installation ?: return
+        val map = boardMaps.load(inst.id)
+        val latest = store.loadReadings(inst.id).map { it.reading }
+            .groupBy { it.circuitId }.mapValues { (_, rs) -> rs.maxBy { it.epochMillis } }
+        val dots = inst.circuits.associate { c -> c.id to BoardMap.dotOf(map.results[c.id], latest[c.id]) }
+        update { it.copy(boardMap = map, boardDots = dots) }
+    }
+
+    /** Every circuit's latest result, for "which wires have a problem?". Same source as the map's dots. */
+    fun latestDots(): List<Pair<String, BoardMap.Dot>> {
+        val inst = _state.value.installation ?: return emptyList()
+        openBoardMap()
+        val dots = _state.value.boardDots
+        return inst.circuits.map { it.label to (dots[it.id] ?: BoardMap.dotOf(null, null)) }
+    }
+
+    // ---- voice ----
+
+    /**
+     * Asks the on-device model to rephrase a request the rules did not recognise
+     * into one of their commands, and parses that with the same rules. [onDone]
+     * gets null when there is no model, it is busy, or the rephrasing still means
+     * nothing -- the model can only ever pick an action the rules already know.
+     */
+    fun rephraseCommand(heard: String, onDone: (VoiceCommand.Command?) -> Unit) {
+        val a = _state.value.assistant
+        if (!a.installed || a.busy) { onDone(null); return }
+        val circuits = _state.value.installation?.circuits ?: emptyList()
+        val names = circuits.map { VoiceCommand.Name(it.id, it.label) }
+        update { it.copy(assistant = it.assistant.copy(busy = true)) }
+        viewModelScope.launch {
+            var reply = ""
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                assistant.generate(VoiceCommand.modelPrompt(heard, circuits.map { it.label })) { reply = it }
+            }
+            update { it.copy(assistant = it.assistant.copy(busy = false)) }
+            onDone(VoiceCommand.parse(VoiceCommand.firstLine(reply), names))
+        }
+    }
+
+    fun placePin(circuitId: String, x: Double, y: Double) {
+        val inst = _state.value.installation ?: return
+        boardMaps.placePin(inst.id, circuitId, BoardMap.Pin(x.coerceIn(0.0, 1.0), y.coerceIn(0.0, 1.0)))
+        openBoardMap()
+    }
+
+    /**
+     * Board Map's quickest setup: a tap on a switch in the photo makes a new
+     * circuit and puts its dot there, in one step.
+     */
+    fun addCircuitAt(label: String, breakerRatingA: Double?, x: Double, y: Double) {
+        val inst = _state.value.installation ?: return
+        val id = "c${System.currentTimeMillis()}"
+        saveInstallation(inst.copy(circuits = inst.circuits + Circuit(id, label, breakerRatingA)))
+        placePin(id, x, y)
+    }
+
+    fun removePin(circuitId: String) {
+        val inst = _state.value.installation ?: return
+        boardMaps.removePin(inst.id, circuitId)
+        openBoardMap()
     }
 
     fun recordPhoneCheck(passed: Boolean, rateHz: Double) {
@@ -309,6 +428,7 @@ class TaarViewModel(
                 calibration = Calibration(),
                 referenceJustRecorded = false,
                 error = null,
+                costHours = hoursFor(circuitId),
             )
         }
         refreshThresholds()
@@ -336,6 +456,8 @@ class TaarViewModel(
         val circuit = selectedCircuit ?: return
         val installation = _state.value.installation ?: return
         if (_state.value.busy) return
+        // Busy at once, as in measure(), so the microphone is never reopened in between.
+        update { it.copy(capture = CaptureProgress(CaptureKind.REFERENCE, 1, Baseline.MIN_SAMPLES, settling = true)) }
 
         viewModelScope.launch {
             update { it.copy(referenceJustRecorded = false, error = null) }
@@ -396,6 +518,9 @@ class TaarViewModel(
             update { it.copy(error = "Record a reference for this circuit first.") }
             return
         }
+        // Busy from this instant, not from inside the coroutine: a voice conversation
+        // checks busy to decide whether it may open the microphone again.
+        update { it.copy(capture = CaptureProgress(CaptureKind.MEASURE, 1, 1, settling = true)) }
 
         viewModelScope.launch {
             // Cleared before capturing, so the screen can never show the previous
@@ -453,6 +578,17 @@ class TaarViewModel(
                         history = earlierMetrics(installation.id, circuit, reading.epochMillis),
                     ),
                 )
+            }
+
+            // The map shows what this screen showed, not a re-derivation of it.
+            fusion?.let { f ->
+                boardMaps.recordResult(installation.id, circuit.id,
+                    BoardMap.LastResult(reading.epochMillis, f.outcome, LineState.of(reading.lineConfidence)))
+                // Spoken only now, after the recording has finished: the phone is often
+                // pressed against the cable, screen away from the technician.
+                val cost = EnergyCost.estimate(metrics?.impliedCurrentA, _state.value.costHours, _state.value.tariffRate)
+                speaker.speak(SpokenResult.of(f.outcome, LineState.of(reading.lineConfidence), circuit.label,
+                    metrics?.impliedCurrentA, cost))
             }
 
             update {
@@ -550,6 +686,7 @@ class TaarViewModel(
      */
     fun startLive() {
         if (_state.value.busy) return
+        speaker.stop()
         liveOn = true
         update { it.copy(live = it.live.copy(running = true)) }
         viewModelScope.launch {
@@ -613,6 +750,7 @@ class TaarViewModel(
         val installation = _state.value.installation ?: return
         if (_state.value.busy || circuit.baseline?.isSufficient != true) return
 
+        speaker.stop()
         scanning = true
         update { it.copy(scan = Scan(circuit.label, running = true)) }
         viewModelScope.launch {
@@ -797,6 +935,11 @@ class TaarViewModel(
     /** Runs [count] captures back to back, publishing progress. Failed captures are dropped. */
     private suspend fun captureSeries(kind: CaptureKind, count: Int): List<CaptureCoordinator.Reading> {
         val out = mutableListOf<CaptureCoordinator.Reading>()
+        // The microphone is the arc sensor: nothing may be playing while it records.
+        speaker.stop()
+        // Every series starts from a tap on the screen; let the phone settle first.
+        update { it.copy(capture = CaptureProgress(kind, 1, count, settling = true)) }
+        delay(SETTLE_MILLIS)
         for (i in 1..count) {
             update { it.copy(capture = CaptureProgress(kind, i, count)) }
             coordinator.capture()?.let { out += it }
@@ -867,5 +1010,17 @@ class TaarViewModel(
         const val KEY_BOARD = "board"
         const val KEY_CIRCUIT = "circuit"
         const val KEY_PHONE_CHECK = "phone_check"
+        const val KEY_GEIGER = "geiger_enabled"
+        const val KEY_RATE = "tariff_rate"
+        /** Followed by the circuit id: hours are per circuit, since a geyser and a fridge differ. */
+        const val KEY_HOURS = "hours:"
+        const val KEY_BOARD_MAP = "board_map_enabled"
+
+        /**
+         * Wait after the tap before recording. The recording used to start the
+         * instant Measure was tapped, so the tap's own jolt was inside it and could
+         * mark a good reading as moved.
+         */
+        const val SETTLE_MILLIS = 1000L
     }
 }

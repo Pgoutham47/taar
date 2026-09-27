@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -173,6 +174,8 @@ fun TaarScreen(
     subtitle: String? = null,
     onBack: (() -> Unit)? = null,
     bottomInset: Boolean = true,
+    /** Passed in only by a screen that needs to scroll itself. */
+    scroll: ScrollState = rememberScrollState(),
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val sides = if (bottomInset) WindowInsetsSides.Horizontal + WindowInsetsSides.Vertical
@@ -189,7 +192,7 @@ fun TaarScreen(
             }
         }
         Column(
-            Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
+            Modifier.fillMaxWidth().verticalScroll(scroll)
                 .padding(horizontal = Space.gutter)
                 .padding(top = if (bar) Space.xs else Space.xl, bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(Space.l),
@@ -419,11 +422,11 @@ fun StepRow(
  * what is happening, and which capture this is.
  */
 @Composable
-fun CapturingPanel(title: String, step: Int, total: Int, what: String) {
+fun CapturingPanel(title: String, step: Int, total: Int, what: String, settling: Boolean = false) {
     val progress = remember(step) { Animatable(0f) }
-    LaunchedEffect(step) {
+    LaunchedEffect(step, settling) {
         progress.snapTo(0f)
-        progress.animateTo(1f, tween(durationMillis = CAPTURE_MILLIS, easing = LinearEasing))
+        if (!settling) progress.animateTo(1f, tween(durationMillis = CAPTURE_MILLIS, easing = LinearEasing))
     }
     TaarCard {
         Column(Modifier.fillMaxWidth().padding(vertical = Space.l), horizontalAlignment = Alignment.CenterHorizontally,
@@ -436,10 +439,17 @@ fun CapturingPanel(title: String, step: Int, total: Int, what: String) {
                     progress = { progress.value }, modifier = Modifier.size(132.dp), color = TaarPalette.Yellow,
                     strokeWidth = 10.dp,
                 )
-                Text("%.0f s".format((1 - progress.value) * CAPTURE_MILLIS / 1000.0 + 0.49),
-                    style = MaterialTheme.typography.headlineMedium)
+                Text(
+                    if (settling) "Ready" else "%.0f s".format((1 - progress.value) * CAPTURE_MILLIS / 1000.0 + 0.49),
+                    style = MaterialTheme.typography.headlineMedium,
+                )
             }
-            Text("Keep the phone still", style = MaterialTheme.typography.titleLarge, color = TaarPalette.Yellow)
+            Text(if (settling) "Hold still…" else "Keep the phone still",
+                style = MaterialTheme.typography.titleLarge, color = TaarPalette.Yellow)
+            if (settling) {
+                Text("Recording starts in a moment, once the tap has settled",
+                    style = MaterialTheme.typography.bodySmall, color = TaarPalette.Grey, textAlign = TextAlign.Center)
+            }
             Text(if (total > 1) "$title · capture $step of $total" else title,
                 style = MaterialTheme.typography.titleSmall, color = TaarPalette.Grey)
             Text(what, style = MaterialTheme.typography.bodySmall, color = TaarPalette.Faint, textAlign = TextAlign.Center)

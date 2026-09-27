@@ -61,6 +61,10 @@ dependencies {
     // On-device assistant: Qwen2.5-0.5B through MediaPipe LLM Inference. 0.10.35 has no
     // Kotlin dependency; Google's newer LiteRT-LM needs Kotlin 2.4.
     implementation("com.google.mediapipe:tasks-genai:0.10.35")
+    // Offline speech recognition for voice commands: Vosk (Kaldi) with its small Indian
+    // English model in assets/model-en-in. JNA is its native bridge, as an AAR for Android.
+    implementation("com.alphacephei:vosk-android:0.3.47@aar")
+    implementation("net.java.dev.jna:jna:5.13.0@aar")
 
     testImplementation("junit:junit:4.13.2")
 

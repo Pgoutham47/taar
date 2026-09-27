@@ -7,12 +7,16 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -149,6 +153,19 @@ fun HomeScreen(
             }
         }
 
+        if (state.boardMapEnabled) {
+            TaarCard {
+                ListRow("Board Map", "See every circuit on a photo of the board",
+                    icon = Icons.Filled.Place, iconTint = TaarPalette.Green, onClick = { onGo(MainActivity.Screen.BOARD_MAP) })
+            }
+        }
+        if (state.geigerEnabled) {
+            TaarCard {
+                ListRow("Geiger Mode", "Find wires carrying current by sound. No setup needed.",
+                    icon = Icons.Filled.Notifications, iconTint = TaarPalette.Red, onClick = { onGo(MainActivity.Screen.GEIGER) })
+            }
+        }
+
         Hint("Taar is a triage aid. It senses current, not voltage, and does not replace a licensed " +
             "electrician, a calibrated meter or a voltage tester.")
     }
@@ -156,10 +173,26 @@ fun HomeScreen(
 
 /** Deeper checks and setup, one tap away from any tab. */
 @Composable
-fun ToolsScreen(onGo: (MainActivity.Screen) -> Unit) {
+fun ToolsScreen(
+    geigerEnabled: Boolean,
+    onGeigerEnabled: (Boolean) -> Unit,
+    boardMapEnabled: Boolean,
+    onBoardMapEnabled: (Boolean) -> Unit,
+    onGo: (MainActivity.Screen) -> Unit,
+) {
     TaarScreen(title = "Tools", subtitle = "Deeper checks and setup", bottomInset = false) {
         SectionLabel("Inspect")
         TaarCard {
+            if (boardMapEnabled) {
+                ListRow("Board Map", "A photo of the board with every circuit's latest result on it",
+                    icon = Icons.Filled.Place, iconTint = TaarPalette.Green, onClick = { onGo(MainActivity.Screen.BOARD_MAP) })
+                Rule()
+            }
+            if (geigerEnabled) {
+                ListRow("Geiger Mode", "Clicks faster as the phone nears a wire carrying current",
+                    icon = Icons.Filled.Notifications, iconTint = TaarPalette.Red, onClick = { onGo(MainActivity.Screen.GEIGER) })
+                Rule()
+            }
             ListRow("Cable Scan", "Find where along a cable the sparking signal is strongest",
                 icon = Icons.Filled.Search, onClick = { onGo(MainActivity.Screen.CABLE_SCAN) })
             Rule()
@@ -177,6 +210,18 @@ fun ToolsScreen(onGo: (MainActivity.Screen) -> Unit) {
             ListRow("Calibrate amps", "Use an appliance of known power to show amperes",
                 icon = Icons.Filled.Build, iconTint = TaarPalette.Grey, onClick = { onGo(MainActivity.Screen.CALIBRATE) })
         }
+        SectionLabel("Extra modes")
+        TaarCard {
+            ModeSwitch(
+                "Board Map", "A photo of the board with a coloured dot on each breaker. When on, it shows on Home and here.",
+                Icons.Filled.Place, TaarPalette.Green, boardMapEnabled, onBoardMapEnabled,
+            )
+            Rule()
+            ModeSwitch(
+                "Geiger Mode", "A live-wire finder that clicks faster near current. When on, it shows on Home and here.",
+                Icons.Filled.Notifications, TaarPalette.Red, geigerEnabled, onGeigerEnabled,
+            )
+        }
         SectionLabel("About")
         TaarCard {
             Metric("Version", "0.1")
@@ -185,6 +230,32 @@ fun ToolsScreen(onGo: (MainActivity.Screen) -> Unit) {
             Metric("Network", "none · offline")
         }
     }
+}
+
+/** One extra mode: what it is, and a switch that turns it on. */
+@Composable
+private fun ModeSwitch(
+    title: String,
+    detail: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    tint: androidx.compose.ui.graphics.Color,
+    on: Boolean,
+    onChange: (Boolean) -> Unit,
+) {
+    ListRow(
+        title, detail, icon = icon, iconTint = if (on) tint else TaarPalette.Grey,
+        trailing = {
+            Switch(
+                checked = on, onCheckedChange = onChange,
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = TaarPalette.Background, checkedTrackColor = TaarPalette.Yellow,
+                    uncheckedThumbColor = TaarPalette.Grey, uncheckedTrackColor = TaarPalette.SurfaceHigh,
+                    uncheckedBorderColor = TaarPalette.Outline,
+                ),
+            )
+        },
+        onClick = { onChange(!on) },
+    )
 }
 
 /** "14:05" for today, "25 Sep 14:05" otherwise. */

@@ -63,6 +63,7 @@ fun ReferenceScreen(
                 step = state.capture!!.step,
                 total = state.capture.total,
                 what = "Listening for the 50 Hz hum of current in the cable.",
+                settling = state.capture.settling,
             )
 
             state.referenceJustRecorded && circuit.baseline != null -> {
@@ -187,7 +188,7 @@ fun CalibrateScreen(
             when {
                 kind == TaarViewModel.CaptureKind.CALIBRATE_OFF -> CapturingPanel(
                     "Appliance OFF", state.capture!!.step, state.capture.total,
-                    "Measuring the background with nothing running.",
+                    "Measuring the background with nothing running.", settling = state.capture.settling,
                 )
                 cal.offDone -> Hint("✓ " + summary(cal.offConfidences), color = TaarPalette.Green)
             }
@@ -206,7 +207,7 @@ fun CalibrateScreen(
             when {
                 kind == TaarViewModel.CaptureKind.CALIBRATE_ON -> CapturingPanel(
                     "Appliance ON", state.capture!!.step, state.capture.total,
-                    "Measuring the field while the appliance runs.",
+                    "Measuring the field while the appliance runs.", settling = state.capture.settling,
                 )
                 cal.onDone -> Hint("✓ " + summary(cal.onConfidences), color = TaarPalette.Green)
             }

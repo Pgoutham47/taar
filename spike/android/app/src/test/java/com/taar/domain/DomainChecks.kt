@@ -73,6 +73,36 @@ object DomainChecks {
         scanDownweightsFairPoints(),
         scanStrengthIsBounded(),
         scanStoreRoundTrips(),
+        geigerLevelIsBoundedAndRises(),
+        geigerIsSilentWhenQuiet(),
+        geigerQuietHereStaysWithinLimits(),
+        geigerSmootherRisesFasterThanItFalls(),
+        geigerClicksAtTheRequestedRate(),
+        geigerHearsACableInAShortWindow(),
+        boardMapRoundTrips(),
+        boardMapSkipsABadRow(),
+        boardMapShowsTheMeasuredResult(),
+        boardMapPrefersANewerReading(),
+        boardMapUnmeasuredAndSummary(),
+        boardMapNumbersInTapOrder(),
+        spokenResultNeverCallsAWireSafe(),
+        spokenResultLeadsWithWarnings(),
+        spokenResultSaysAmpsOnlyWhenFlowing(),
+        energyCostOfTheKettle(),
+        energyCostRefusesWithoutAmps(),
+        energyCostRoundsToWhatTheReadingCanSupport(),
+        spokenResultSaysTheCostInWords(),
+        voiceUnderstandsTheEverydayCommands(),
+        voiceFindsCircuitsByName(),
+        voiceReadsHoursAndNumbers(),
+        voiceLeavesTheUnknownToTheModel(),
+        voiceAnswersWhichWiresHaveAProblem(),
+        voiceModelCanOnlyChooseFromTheList(),
+        voiceHandlesWhatTheRecogniserActuallyHeard(),
+        voiceVocabularyCoversTheBoard(),
+        voiceUnderstandsTheNewCommands(),
+        voiceNeverActsOnARepliesWord(),
+        voiceIgnoresChatterButNotCommands(),
         assistantPromptCarriesEvidenceAndRules(),
         assistantPromptStaysInsideTheWindow(),
         assistantFlagsCertaintyAboutSafety(),
@@ -950,5 +980,418 @@ object DomainChecks {
             "Never say a wire or circuit is safe or unsafe" !in p -> "safety rule missing"
             else -> null
         }
+    }
+
+    fun geigerLevelIsBoundedAndRises() = check("geiger: level is 0 at quiet, 1 at full, and rises between") {
+        val s = Geiger.Scale()
+        val levels = listOf(1.0, s.quiet, 8.0, 12.0, 20.0, s.full, 500.0).map { s.level(it) }
+        when {
+            levels[0] != 0.0 || levels[1] != 0.0 -> "below or at quiet gave ${levels.take(2)}"
+            !near(levels[5], 1.0) || levels[6] != 1.0 -> "full gave ${levels[5]}, far above gave ${levels[6]}"
+            levels.zipWithNext().any { (a, b) -> b < a } -> "not monotonic: $levels"
+            else -> null
+        }
+    }
+
+    fun geigerIsSilentWhenQuiet() = check("geiger: no clicks when quiet, fastest at full strength") {
+        when {
+            Geiger.clicksPerSecond(0.0) != 0.0 -> "quiet clicks at ${Geiger.clicksPerSecond(0.0)}/s"
+            !near(Geiger.clicksPerSecond(1.0), Geiger.MAX_CLICKS_PER_S) -> "full gave ${Geiger.clicksPerSecond(1.0)}/s"
+            Geiger.clicksPerSecond(0.01) < Geiger.MIN_CLICKS_PER_S -> "just above quiet is too slow to hear"
+            Geiger.Zone.of(0.0) != Geiger.Zone.QUIET -> "level 0 is not quiet"
+            Geiger.Zone.of(1.0) != Geiger.Zone.CLOSE -> "level 1 is not close"
+            else -> null
+        }
+    }
+
+    fun geigerQuietHereStaysWithinLimits() = check("geiger: 'set quiet here' lifts the floor, within limits") {
+        val low = Geiger.Scale().quietAt(1.0)
+        val mid = Geiger.Scale().quietAt(8.0)
+        val high = Geiger.Scale().quietAt(1000.0)
+        when {
+            low.quiet != Geiger.DEFAULT_QUIET -> "a quiet room lowered the floor to ${low.quiet}"
+            !near(mid.quiet, 12.0) -> "background 8x gave floor ${mid.quiet}, expected 12"
+            mid.level(8.0) != 0.0 -> "the background itself still clicks"
+            high.quiet != Geiger.MAX_QUIET -> "floor not capped: ${high.quiet}"
+            high.full < high.quiet * Geiger.MIN_SPAN -> "scale collapsed: ${high.quiet}..${high.full}"
+            else -> null
+        }
+    }
+
+    fun geigerSmootherRisesFasterThanItFalls() = check("geiger: smoothing rises fast and falls slowly") {
+        val up = Geiger.Smoother().apply { update(2.0) }.update(40.0)
+        val down = Geiger.Smoother().apply { update(40.0) }.update(2.0)
+        // Equal steps in log terms: rising should cover more of the way than falling.
+        val rose = kotlin.math.ln(up / 2.0) / kotlin.math.ln(20.0)
+        val fell = kotlin.math.ln(40.0 / down) / kotlin.math.ln(20.0)
+        if (rose > fell) null else "rose $rose of the way, fell $fell"
+    }
+
+    fun geigerClicksAtTheRequestedRate() = check("geiger: random clicks average the requested rate") {
+        val rnd = java.util.Random(3)
+        val tick = 0.010
+        val seconds = 200.0
+        var n = 0
+        repeat((seconds / tick).toInt()) { if (Geiger.clickInTick(10.0, tick, rnd.nextDouble())) n++ }
+        val rate = n / seconds
+        if (abs(rate - 10.0) < 0.6) null else "asked 10/s, got $rate/s"
+    }
+
+    /**
+     * A simulated 1.2 s window at the iQOO's measured rate and noise floor: a weak
+     * 50 Hz field must click, and noise alone must not.
+     */
+    fun geigerHearsACableInAShortWindow() = check("geiger: a weak 50 Hz field clicks in 1.2 s, noise alone does not") {
+        fun window(seed: Long, amplitudeUt: Double): Double {
+            val rnd = java.util.Random(seed)
+            val t = ArrayList<Double>()
+            var now = 0.0
+            while (now < Geiger.WINDOW_SECONDS) { t += now; now += (1 / 105.3) * (1 + 0.05 * rnd.nextGaussian()) }
+            val ts = t.toDoubleArray()
+            // Earth's static field, a slow hand drift, sensor noise at the measured 0.4 uT.
+            fun axis(static: Double, signal: Double) = DoubleArray(ts.size) {
+                static + 1.5 * kotlin.math.sin(2 * Math.PI * 0.7 * ts[it]) + 0.4 * rnd.nextGaussian() +
+                    signal * kotlin.math.sin(2 * Math.PI * 50.0 * ts[it] + 0.3)
+            }
+            return Geiger.contrast(ts, axis(20.0, amplitudeUt), axis(-12.0, 0.0), axis(38.0, 0.0))
+        }
+        val noise = (1L..40L).map { window(it, 0.0) }.sorted()
+        val cable = (1L..40L).map { window(100 + it, 0.35) }.sorted()
+        val s = Geiger.Scale()
+        val noiseClicks = noise.count { s.level(it) > 0 }
+        when {
+            noise[20] >= Geiger.DEFAULT_QUIET -> "median noise ${noise[20]} is above quiet"
+            noiseClicks > 4 -> "noise alone clicked in $noiseClicks of 40 windows (median ${noise[20]})"
+            cable[4] <= Geiger.DEFAULT_QUIET * 2 -> "0.35 uT field too weak: 10th percentile ${cable[4]}"
+            else -> null
+        }
+    }
+
+    fun boardMapRoundTrips() = check("board map: pins and results survive a save and load") {
+        val store = BoardMapStore(MemoryFileSystem())
+        store.placePin("b1", "c1", BoardMap.Pin(0.25, 0.5))
+        store.placePin("b1", "c2", BoardMap.Pin(0.75, 0.1))
+        store.placePin("b1", "c1", BoardMap.Pin(0.3, 0.6))
+        store.removePin("b1", "c2")
+        store.recordResult("b1", "c1", BoardMap.LastResult(42L, Fusion.Outcome.POSSIBLE_ARCING, LineState.FLOWING))
+        val m = store.load("b1")
+        when {
+            m.pins != mapOf("c1" to BoardMap.Pin(0.3, 0.6)) -> "pins read ${m.pins}"
+            m.results["c1"]?.outcome != Fusion.Outcome.POSSIBLE_ARCING -> "result read ${m.results}"
+            store.load("other").pins.isNotEmpty() -> "another board shares pins"
+            else -> null
+        }
+    }
+
+    fun boardMapSkipsABadRow() = check("board map: one unreadable row does not lose the rest") {
+        val fs = MemoryFileSystem()
+        fs.write("boardmap/b1.tsv", "taar-boardmap/1\npin\tc1\t0.5\t0.5\npin\tc2\tnot-a-number\t1\n" +
+            "result\tc1\t5\tNO_SUCH_OUTCOME\tFLOWING\n")
+        val m = BoardMapStore(fs).load("b1")
+        when {
+            m.pins.keys != setOf("c1") -> "pins ${m.pins.keys}"
+            m.results.isNotEmpty() -> "bad result kept"
+            else -> null
+        }
+    }
+
+    fun boardMapShowsTheMeasuredResult() = check("board map: a dot shows the result the measurement reached") {
+        fun dot(o: Fusion.Outcome, line: LineState) = BoardMap.dotOf(BoardMap.LastResult(10L, o, line), null).mark
+        when {
+            dot(Fusion.Outcome.POSSIBLE_ARCING, LineState.FLOWING) != BoardMap.Mark.PROBLEM -> "arcing not a problem"
+            dot(Fusion.Outcome.CURRENT_ABNORMAL, LineState.FLOWING) != BoardMap.Mark.CHECK -> "abnormal not check"
+            dot(Fusion.Outcome.UNRELIABLE, LineState.FLOWING) != BoardMap.Mark.UNCLEAR -> "unreliable not unclear"
+            dot(Fusion.Outcome.NO_ANOMALY, LineState.FLOWING) != BoardMap.Mark.LIVE -> "normal live not live"
+            dot(Fusion.Outcome.NO_ANOMALY, LineState.NONE) != BoardMap.Mark.OFF -> "normal idle not off"
+            dot(Fusion.Outcome.NO_CURRENT_ISOLATED, LineState.NONE) != BoardMap.Mark.OFF -> "isolated not off"
+            else -> null
+        }
+    }
+
+    fun boardMapPrefersANewerReading() = check("board map: a newer reading replaces an older result") {
+        val old = BoardMap.LastResult(10L, Fusion.Outcome.POSSIBLE_ARCING, LineState.FLOWING)
+        val newer = Reading("c1", 20L, fieldAmplitudeUt = 0.1, lineConfidence = 0.1, arcModulationIndex = 0.0)
+        val same = newer.copy(epochMillis = 10L)
+        when {
+            BoardMap.dotOf(old, newer).mark != BoardMap.Mark.OFF -> "newer idle reading ignored"
+            BoardMap.dotOf(old, same).mark != BoardMap.Mark.PROBLEM -> "the result's own reading replaced it"
+            else -> null
+        }
+    }
+
+    fun boardMapUnmeasuredAndSummary() = check("board map: unmeasured circuits say so; summary is most urgent first") {
+        val none = BoardMap.dotOf(null, null)
+        val dots = listOf(
+            none, BoardMap.Dot(BoardMap.Mark.LIVE, 1L, null), BoardMap.Dot(BoardMap.Mark.LIVE, 2L, null),
+            BoardMap.Dot(BoardMap.Mark.PROBLEM, 3L, "x"),
+        )
+        val s = BoardMap.summary(dots)
+        when {
+            none.mark != BoardMap.Mark.NOT_MEASURED -> "unmeasured gave ${none.mark}"
+            s != "1 problem · 2 current flowing · 1 not measured" -> "summary '$s'"
+            else -> null
+        }
+    }
+
+    fun boardMapNumbersInTapOrder() = check("board map: the first switch tapped is dot 1, whatever the board held") {
+        val pin = BoardMap.Pin(0.5, 0.5)
+        val board = listOf("c1", "c2", "c3", "new")
+        val pins = linkedMapOf("new" to pin, "c2" to pin, "gone" to pin)
+        val order = BoardMap.order(board, pins)
+        val moved = BoardMap.order(board, pins + ("new" to BoardMap.Pin(0.1, 0.1)))
+        when {
+            order != listOf("new", "c2", "c1", "c3") -> "order $order"
+            moved != order -> "moving a dot changed the numbers: $moved"
+            else -> null
+        }
+    }
+
+    fun spokenResultNeverCallsAWireSafe() = check("spoken result: no sentence ever calls a wire safe") {
+        val all = Fusion.Outcome.entries.flatMap { o ->
+            LineState.entries.map { l -> SpokenResult.of(o, l, "Kitchen", 3.0) }
+        }
+        all.firstOrNull { Regex("\\bsafe\\b", RegexOption.IGNORE_CASE).containsMatchIn(it) }?.let { "said: $it" }
+    }
+
+    fun spokenResultLeadsWithWarnings() = check("spoken result: critical results start with Warning, after the name") {
+        val critical = Fusion.Outcome.entries.filter { it.tone == Fusion.Tone.CRITICAL }
+        val bad = critical.map { SpokenResult.of(it, LineState.FLOWING, "Geyser", null) }
+            .firstOrNull { !it.startsWith("Geyser. Warning.") }
+        val isolated = SpokenResult.of(Fusion.Outcome.NO_CURRENT_ISOLATED, LineState.NONE, null, null)
+        when {
+            bad != null -> "said: $bad"
+            "voltage tester" !in isolated -> "a switched-off circuit is not reminded about voltage"
+            else -> null
+        }
+    }
+
+    fun spokenResultSaysAmpsOnlyWhenFlowing() = check("spoken result: amps only when calibrated and flowing") {
+        val flowing = SpokenResult.of(Fusion.Outcome.NO_ANOMALY, LineState.FLOWING, null, 5.24)
+        val uncalibrated = SpokenResult.of(Fusion.Outcome.NO_ANOMALY, LineState.FLOWING, null, null)
+        val idle = SpokenResult.of(Fusion.Outcome.NO_ANOMALY, LineState.NONE, null, 0.02)
+        when {
+            "About 5.2 amps." !in flowing -> "flowing said: $flowing"
+            "amps" in uncalibrated -> "uncalibrated said amps: $uncalibrated"
+            "amps" in idle -> "idle said amps: $idle"
+            else -> null
+        }
+    }
+
+    fun energyCostOfTheKettle() = check("cost: the 1200 W kettle, 1 h a day at ₹7.70, is about ₹280 a month") {
+        // 5.2 A x 230 V = 1.196 kW; x 1 h x 30 days = 35.9 units; x 7.70 = ₹276.
+        val e = EnergyCost.estimate(5.2, 1.0, EnergyCost.DEFAULT_RATE)
+        when {
+            e == null -> "no estimate"
+            !near(e.kilowatts, 1.196, 1e-3) -> "kW ${e.kilowatts}"
+            !near(e.unitsPerMonth, 35.88, 1e-2) -> "units ${e.unitsPerMonth}"
+            EnergyCost.rupees(e.rupeesPerMonth) != "₹280" -> "shown as ${EnergyCost.rupees(e.rupeesPerMonth)}"
+            else -> null
+        }
+    }
+
+    fun energyCostRefusesWithoutAmps() = check("cost: nothing is costed without calibrated amps or with nonsense inputs") {
+        when {
+            EnergyCost.estimate(null, 4.0, 7.7) != null -> "uncalibrated got a cost"
+            EnergyCost.estimate(0.0, 4.0, 7.7) != null -> "no current got a cost"
+            EnergyCost.estimate(5.0, 25.0, 7.7) != null -> "25 hours a day accepted"
+            EnergyCost.estimate(5.0, 4.0, 0.0) != null -> "a zero rate accepted"
+            else -> null
+        }
+    }
+
+    fun energyCostRoundsToWhatTheReadingCanSupport() = check("cost: two significant figures, Indian grouping") {
+        val shown = listOf(7.4, 37.2, 276.3, 2127.0, 123456.0, 12345678.0).map { EnergyCost.rupees(it) }
+        if (shown == listOf("₹7", "₹37", "₹280", "₹2,100", "₹1,20,000", "₹1,20,00,000")) null else "shown as $shown"
+    }
+
+    fun spokenResultSaysTheCostInWords() = check("spoken result: the monthly cost is said in rupees, only with amps") {
+        val cost = EnergyCost.estimate(6.2, 8.0, EnergyCost.DEFAULT_RATE)
+        val with = SpokenResult.of(Fusion.Outcome.NO_ANOMALY, LineState.FLOWING, "AC", 6.2, cost)
+        val idle = SpokenResult.of(Fusion.Outcome.NO_ANOMALY, LineState.NONE, "AC", null, cost)
+        when {
+            // 6.2 A x 230 V = 1.426 kW; x 8 h x 30 days = 342 units; x 7.70 = ₹2,635.
+            "about 2,600 rupees a month at 8 hours a day" !in with -> "said: $with"
+            "₹" in with -> "the symbol would be read out oddly: $with"
+            "rupees" in idle -> "idle wire given a cost: $idle"
+            else -> null
+        }
+    }
+
+    private val voiceCircuits = listOf(
+        VoiceCommand.Name("k", "Kitchen"), VoiceCommand.Name("ac", "AC"), VoiceCommand.Name("g", "Geyser"),
+        VoiceCommand.Name("lp", "Left black plug"), VoiceCommand.Name("rp", "Right black plug"),
+        VoiceCommand.Name("c1", "Circuit 1"),
+    )
+
+    private fun heard(s: String) = VoiceCommand.parse(s, voiceCircuits)
+
+    fun voiceUnderstandsTheEverydayCommands() = check("voice: everyday phrasing maps to the right action") {
+        val cases = listOf<Pair<String, VoiceCommand.Command>>(
+            "measure the kitchen wire" to VoiceCommand.Command.Measure("k"),
+            "check the geyser" to VoiceCommand.Command.Measure("g"),
+            "measure" to VoiceCommand.Command.Measure(null),
+            "record normal for the a c" to VoiceCommand.Command.RecordNormal("ac"),
+            "open board map" to VoiceCommand.Command.Open(VoiceCommand.Place.BOARD_MAP),
+            "start geiger mode" to VoiceCommand.Command.Open(VoiceCommand.Place.GEIGER),
+            "go home" to VoiceCommand.Command.Open(VoiceCommand.Place.HOME),
+            "show history" to VoiceCommand.Command.Open(VoiceCommand.Place.HISTORY),
+            "start the phone check" to VoiceCommand.Command.Open(VoiceCommand.Place.PHONE_CHECK),
+            "calibrate amps" to VoiceCommand.Command.Open(VoiceCommand.Place.CALIBRATE),
+            "which wires have a problem" to VoiceCommand.Command.Problems,
+            "say that again" to VoiceCommand.Command.Repeat,
+            "how much does the ac cost" to VoiceCommand.Command.Cost("ac"),
+            "ask what does grey mean" to VoiceCommand.Command.Ask("what does grey mean"),
+            "kitchen" to VoiceCommand.Command.Select("k"),
+        )
+        cases.firstOrNull { (said, want) -> heard(said) != want }?.let { (said, want) -> "'$said' gave ${heard(said)}, want $want" }
+    }
+
+    fun voiceFindsCircuitsByName() = check("voice: circuits found by most of their name; a tie is no guess") {
+        when {
+            heard("measure left plug") != VoiceCommand.Command.Measure("lp") -> "left plug gave ${heard("measure left plug")}"
+            heard("measure the black plug") != VoiceCommand.Command.Measure(null) -> "left and right both match 'black plug', must not guess"
+            heard("measure circuit one") != VoiceCommand.Command.Measure("c1") -> "circuit one gave ${heard("measure circuit one")}"
+            heard("measure the bathroom") != VoiceCommand.Command.Measure(null) -> "an unknown name picked a circuit"
+            else -> null
+        }
+    }
+
+    fun voiceReadsHoursAndNumbers() = check("voice: hours for the cost, in words or digits, per circuit") {
+        when {
+            heard("the geyser runs two hours a day") != VoiceCommand.Command.SetHours(2.0, "g") -> "gave ${heard("the geyser runs two hours a day")}"
+            heard("ac runs twenty four hours") != VoiceCommand.Command.SetHours(24.0, "ac") -> "gave ${heard("ac runs twenty four hours")}"
+            heard("kitchen is on all day") != VoiceCommand.Command.SetHours(24.0, "k") -> "gave ${heard("kitchen is on all day")}"
+            heard("8 hours") != VoiceCommand.Command.SetHours(8.0, null) -> "gave ${heard("8 hours")}"
+            VoiceCommand.normalise("Twenty-four, A.C.!") != listOf("24", "ac") -> "normalise gave ${VoiceCommand.normalise("Twenty-four, A.C.!")}"
+            else -> null
+        }
+    }
+
+    fun voiceLeavesTheUnknownToTheModel() = check("voice: what the rules do not know is left for the model, not guessed") {
+        val unknown = listOf("what does grey mean", "tell me a joke", "", "   ")
+        unknown.firstOrNull { heard(it) != null }?.let { "'$it' gave ${heard(it)}" }
+    }
+
+    fun voiceAnswersWhichWiresHaveAProblem() = check("voice: 'which wires have a problem' names them, problems first") {
+        fun dot(m: BoardMap.Mark) = BoardMap.Dot(m, 1L, null)
+        val mixed = VoiceCommand.problemsAnswer(listOf(
+            "Kitchen" to dot(BoardMap.Mark.LIVE), "Geyser" to dot(BoardMap.Mark.PROBLEM),
+            "AC" to dot(BoardMap.Mark.CHECK), "Lights" to dot(BoardMap.Mark.NOT_MEASURED),
+        ))
+        val calm = VoiceCommand.problemsAnswer(listOf("Kitchen" to dot(BoardMap.Mark.LIVE)))
+        when {
+            mixed != "Geyser has a problem. AC needs a check. Lights is not measured yet." -> "said: $mixed"
+            calm != "No problems in the latest readings." -> "said: $calm"
+            Regex("\\bsafe\\b").containsMatchIn(mixed + calm) -> "called something safe"
+            else -> null
+        }
+    }
+
+    fun voiceModelCanOnlyChooseFromTheList() = check("voice: the model's reply is parsed by the same rules") {
+        val p = VoiceCommand.modelPrompt("could you have a look at the geyser for me", listOf("Kitchen", "Geyser"))
+        val reply = VoiceCommand.firstLine("- measure geyser\nThis will measure the geyser.")
+        when {
+            "Circuits: Kitchen, Geyser." !in p -> "circuits missing from the prompt"
+            "could you have a look at the geyser for me" !in p -> "request missing from the prompt"
+            reply != "measure geyser" -> "first line was '$reply'"
+            heard(reply) != VoiceCommand.Command.Measure("g") -> "rephrasing parsed as ${heard(reply)}"
+            VoiceCommand.parse(VoiceCommand.firstLine("delete everything"), voiceCircuits) != null -> "an unlisted action was accepted"
+            else -> null
+        }
+    }
+
+    /** Transcripts the limited recogniser produced from spoken test commands, as they came out. */
+    fun voiceHandlesWhatTheRecogniserActuallyHeard() = check("voice: real recogniser output still finds the right action") {
+        val cases = listOf<Pair<String, VoiceCommand.Command>>(
+            "measure kitchen wire" to VoiceCommand.Command.Measure("k"),
+            "how much does c cost" to VoiceCommand.Command.Cost("ac"),
+            "how much does day c cost" to VoiceCommand.Command.Cost("ac"),
+            "record normal for day c" to VoiceCommand.Command.RecordNormal("ac"),
+            "the geyser runs two hours day" to VoiceCommand.Command.SetHours(2.0, "g"),
+            "which wires has problem" to VoiceCommand.Command.Problems,
+            "that again" to VoiceCommand.Command.Repeat,
+            "check the geyser" to VoiceCommand.Command.Measure("g"),
+            "home" to VoiceCommand.Command.Open(VoiceCommand.Place.HOME),
+        )
+        cases.firstOrNull { (said, want) -> heard(said) != want }?.let { (said, want) -> "'$said' gave ${heard(said)}, want $want" }
+    }
+
+    fun voiceVocabularyCoversTheBoard() = check("voice: the recogniser's words cover commands, numbers and this board") {
+        val v = VoiceCommand.vocabulary(listOf("Kitchen", "AC", "Left black plug"))
+        val missing = listOf("measure", "geyser", "kitchen", "a", "c", "left", "black", "plug", "twenty", "four", "hours")
+            .filter { it !in v && it != "geyser" }
+        when {
+            missing.isNotEmpty() -> "missing $missing"
+            heard("geyser runs to hours a day") != VoiceCommand.Command.SetHours(2.0, "g") -> "'to hours' not read as two"
+            heard("geyser runs do hours") != VoiceCommand.Command.SetHours(2.0, "g") -> "'do hours' not read as two"
+            "geiger" !in v -> "command word missing"
+            else -> null
+        }
+    }
+
+    fun voiceUnderstandsTheNewCommands() = check("voice: next, why, advice, list, toggles, rate, add, scans, end") {
+        val C = listOf<Pair<String, VoiceCommand.Command>>(
+            "next circuit" to VoiceCommand.Command.Next,
+            "go to the next one" to VoiceCommand.Command.Next,
+            "previous" to VoiceCommand.Command.Previous,
+            "why" to VoiceCommand.Command.Why,
+            "explain that" to VoiceCommand.Command.Why,
+            "what should i do" to VoiceCommand.Command.WhatToDo,
+            "list the circuits" to VoiceCommand.Command.ListCircuits,
+            "which circuit is selected" to VoiceCommand.Command.WhichCircuit,
+            "turn off geiger mode" to VoiceCommand.Command.Toggle(VoiceCommand.Mode.GEIGER, false),
+            "enable board map" to VoiceCommand.Command.Toggle(VoiceCommand.Mode.BOARD_MAP, true),
+            "the rate is nine rupees" to VoiceCommand.Command.SetRate(9.0),
+            "tariff seven point seven" to VoiceCommand.Command.SetRate(7.7),
+            "add a circuit called fridge" to VoiceCommand.Command.AddCircuit("Fridge"),
+            "new circuit" to VoiceCommand.Command.Open(VoiceCommand.Place.CIRCUITS),
+            "start a cable scan" to VoiceCommand.Command.StartScan(live = false),
+            "open the cable scan" to VoiceCommand.Command.Open(VoiceCommand.Place.CABLE_SCAN),
+            "is there current in the kitchen" to VoiceCommand.Command.Measure("k"),
+            "take me to history" to VoiceCommand.Command.Open(VoiceCommand.Place.HISTORY),
+            "i want to drill here" to VoiceCommand.Command.Open(VoiceCommand.Place.GEIGER),
+            "read the result" to VoiceCommand.Command.Repeat,
+            "stop listening" to VoiceCommand.Command.End,
+            "thank you" to VoiceCommand.Command.End,
+        )
+        C.firstOrNull { (said, want) -> heard(said) != want }?.let { (said, want) -> "'$said' gave ${heard(said)}, want $want" }
+    }
+
+    fun voiceNeverActsOnARepliesWord() = check("voice: 'okay', 'fine', 'is it normal' never start or overwrite anything") {
+        listOf("okay", "ok", "fine", "yes", "is it normal").firstOrNull { said ->
+            when (heard(said)) {
+                null, is VoiceCommand.Command.Ask -> false
+                else -> true
+            }
+        }?.let { "'$it' gave ${heard(it)}" }
+    }
+
+    /** Real transcripts from the test recordings: (limited recogniser, free recogniser). */
+    fun voiceIgnoresChatterButNotCommands() = check("voice: nearby chatter and noise ignored, real commands kept") {
+        val v = VoiceCommand.vocabulary(listOf("Kitchen", "AC", "Geyser"))
+        val chatter = listOf(
+            "you c the map history day close" to "did you see the match yesterday it was really close",
+            "stop main [unk]" to "i think the laptop needs charging before the demo",
+            "[unk] runs to day" to "where are we going for lunch today",
+            "okay next live show hour" to "okay so the next slide shows the architecture",
+            "" to "boom",
+            "" to "some",
+            "the" to "some",
+            "named" to "some",
+            "a" to "hmm",
+        )
+        val commands = listOf(
+            "measure kitchen wire" to "major the kitchen while",
+            "record normal forty c" to "break record normal for the air sea",
+            "how much does day c cost" to "how much does d air e cost",
+            "the geyser runs do hour" to "the guys are runs to are very rare",
+            "how much does the c cost" to "how much does the air he coughed",
+            "go home" to "go home",
+            "home" to "though home",
+            "again" to "say that again",
+        )
+        val names = listOf(VoiceCommand.Name("k", "Kitchen"), VoiceCommand.Name("ac", "AC"), VoiceCommand.Name("g", "Geyser"))
+        chatter.firstOrNull { (c, f) -> !VoiceCommand.looksLikeChatter(c, f, v, names) }?.let { "chatter kept: ${it.second}" }
+            ?: commands.firstOrNull { (c, f) -> VoiceCommand.looksLikeChatter(c, f, v, names) }?.let { "command dropped: ${it.second}" }
     }
 }

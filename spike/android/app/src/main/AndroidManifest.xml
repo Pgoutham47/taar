@@ -2,11 +2,20 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!--
-      RECORD_AUDIO is the only permission requested. There is deliberately no
+      RECORD_AUDIO is the only permission the person is asked for. VIBRATE is granted
+      at install, for Geiger mode's tick, and asks nothing. There is deliberately no
       INTERNET permission: the app has no server, no account and nothing to upload,
       and its absence from this file is a claim a judge can check in thirty seconds.
     -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+
+    <!-- Lets the app find the phone's own text-to-speech engine, for Speak results. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
+    </queries>
 
     <uses-feature android:name="android.hardware.sensor.compass" android:required="true" />
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
@@ -21,11 +30,23 @@
             android:name=".ui.MainActivity"
             android:exported="true"
             android:resizeableActivity="true"
+            android:launchMode="singleTop"
             android:label="Taar">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Lets the camera app save a Board Map photo straight into private storage. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 </manifest>

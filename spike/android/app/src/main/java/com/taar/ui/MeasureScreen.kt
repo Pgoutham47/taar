@@ -12,6 +12,11 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Surface
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
@@ -28,6 +33,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.taar.domain.Circuit
+import com.taar.domain.EnergyCost
 import com.taar.domain.LineState
 import com.taar.domain.Metrics
 import com.taar.domain.MotionCheck
@@ -53,6 +59,9 @@ fun MeasureScreen(
     onLabel: (Status) -> Unit,
     onAsk: (String) -> Unit,
     onImportModel: (android.net.Uri) -> Unit,
+    onCostHours: (Double) -> Unit,
+    onTariffRate: (Double) -> Unit,
+    onCalibrate: () -> Unit,
     onBack: () -> Unit,
 ) {
     var started by rememberSaveable { mutableStateOf(false) }
@@ -60,6 +69,8 @@ fun MeasureScreen(
     val capturing = state.capture?.kind == TaarViewModel.CaptureKind.MEASURE
     val reading = state.lastReading
     val measure = { showWhy = false; onMeasure() }
+    // A measurement started by voice skips the setup step, straight to the capture.
+    androidx.compose.runtime.LaunchedEffect(capturing) { if (capturing) started = true }
     val why = state.fusion?.takeIf { showWhy && reading != null && !capturing }
 
     TaarScreen(
@@ -90,6 +101,7 @@ fun MeasureScreen(
                 step = 1,
                 total = 1,
                 what = "Listening for the 50 Hz hum of current in the cable.",
+                settling = state.capture?.settling == true,
             )
 
             reading == null -> {
@@ -108,6 +120,9 @@ fun MeasureScreen(
                 onWhy = { showWhy = true },
                 onAsk = onAsk,
                 onImportModel = onImportModel,
+                onCostHours = onCostHours,
+                onTariffRate = onTariffRate,
+                onCalibrate = onCalibrate,
                 onMeasureAgain = measure,
                 onChangeSetup = { started = false },
                 onLabel = onLabel,
@@ -175,6 +190,9 @@ private fun ResultStage(
     onWhy: () -> Unit,
     onAsk: (String) -> Unit,
     onImportModel: (android.net.Uri) -> Unit,
+    onCostHours: (Double) -> Unit,
+    onTariffRate: (Double) -> Unit,
+    onCalibrate: () -> Unit,
     onMeasureAgain: () -> Unit,
     onChangeSetup: () -> Unit,
     onLabel: (Status) -> Unit,
@@ -184,6 +202,7 @@ private fun ResultStage(
     // (no metrics) the individual results are all there is, so they open.
     state.fusion?.let {
         FusionCard(it, onWhy)
+        CostCard(state, reading, circuit, onCostHours, onTariffRate, onCalibrate)
         AssistantPanel(state.assistant, onAsk, onImportModel)
     }
 
@@ -518,4 +537,94 @@ fun motionWord(level: MotionCheck.Level) = when (level) {
     MotionCheck.Level.STILL -> "still"
     MotionCheck.Level.STEADY_HAND -> "steady hand"
     MotionCheck.Level.MOVED -> "moved"
+}
+
+/**
+ * What this wire's load costs, in rupees a month. Needs calibrated amps: without
+ * them there is only a relative index, and a rupee figure from that would be made up.
+ */
+@Composable
+private fun CostCard(
+    state: TaarViewModel.UiState,
+    reading: Reading,
+    circuit: Circuit,
+    onHours: (Double) -> Unit,
+    onRate: (Double) -> Unit,
+    onCalibrate: () -> Unit,
+) {
+    val amps = state.lastImpliedCurrentA
+    TaarCard {
+        SectionLabel("Cost")
+        when {
+            circuit.utPerAmp == null -> {
+                Text("See what this wire costs in rupees", style = MaterialTheme.typography.titleMedium)
+                Hint("Calibrate once with an appliance of known wattage, such as a kettle. After that every " +
+                    "reading shows amps and rupees a month.")
+                SecondaryButton("Calibrate amps", onClick = onCalibrate)
+            }
+            amps == null || LineState.of(reading.lineConfidence) != LineState.FLOWING -> {
+                Text("No current flowing, so nothing is being used right now.", style = MaterialTheme.typography.bodyMedium)
+            }
+            else -> {
+                val e = EnergyCost.estimate(amps, state.costHours, state.tariffRate)
+                if (e != null) {
+                    Text("≈ ${EnergyCost.rupees(e.rupeesPerMonth)} a month", style = MaterialTheme.typography.headlineMedium,
+                        color = TaarPalette.Yellow)
+                    Text(
+                        "%.1f A · %.2f kW · %.0f units a month".format(e.amps, e.kilowatts, e.unitsPerMonth),
+                        style = MaterialTheme.typography.bodyMedium, color = TaarPalette.Grey, fontFamily = FontFamily.Monospace,
+                    )
+                }
+                Text("Runs how long each day?", style = MaterialTheme.typography.labelLarge, color = TaarPalette.Grey)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    for (h in EnergyCost.HOUR_CHOICES) {
+                        val on = h == state.costHours
+                        Surface(
+                            onClick = { onHours(h) }, shape = CircleShape,
+                            color = if (on) TaarPalette.Yellow.copy(alpha = 0.14f) else TaarPalette.Surface,
+                            border = BorderStroke(1.dp, if (on) TaarPalette.Yellow.copy(alpha = 0.6f) else TaarPalette.Outline),
+                        ) {
+                            Text(EnergyCost.hours(h), style = MaterialTheme.typography.labelLarge,
+                                color = if (on) TaarPalette.Yellow else TaarPalette.Grey,
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp))
+                        }
+                    }
+                }
+                RateRow(state.tariffRate, onRate)
+                Hint("An estimate: exact for heaters and kettles, a little high for motors such as ACs and fridges. " +
+                    "Energy charge only; fixed charges and duty on the bill are extra.")
+            }
+        }
+    }
+}
+
+@Composable
+private fun RateRow(rate: Double, onRate: (Double) -> Unit) {
+    var editing by rememberSaveable { mutableStateOf(false) }
+    var text by rememberSaveable(rate) { mutableStateOf("%.2f".format(rate)) }
+    if (!editing) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("₹%.2f per unit".format(rate), style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    if (rate == EnergyCost.DEFAULT_RATE) "TSSPDCL home rate, 201–300 units a month" else "Your rate",
+                    style = MaterialTheme.typography.bodySmall, color = TaarPalette.Grey,
+                )
+            }
+            TextButton(onClick = { editing = true }) { Text("Change", color = TaarPalette.Yellow) }
+        }
+    } else {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTextField(
+                text, { v -> text = v.filter { it.isDigit() || it == '.' } },
+                label = { Text("₹ per unit, from your bill") }, singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = {
+                text.toDoubleOrNull()?.takeIf { it > 0 && it <= 100 }?.let(onRate)
+                editing = false
+            }) { Text("Save", color = TaarPalette.Yellow) }
+        }
+    }
 }
