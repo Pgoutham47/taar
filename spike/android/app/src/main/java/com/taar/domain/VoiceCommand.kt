@@ -17,7 +17,7 @@ import kotlin.math.pow
  */
 object VoiceCommand {
 
-    enum class Place { HOME, TOOLS, ASK, HISTORY, BOARD_MAP, GEIGER, CIRCUITS, CALIBRATE, CABLE_SCAN, LIVE, PHONE_CHECK }
+    enum class Place { HOME, TOOLS, ASK, HISTORY, BOARD_MAP, HOUSE, GEIGER, CIRCUITS, CALIBRATE, CABLE_SCAN, LIVE, PHONE_CHECK }
 
     /** The extra modes a voice command can switch on or off. */
     enum class Mode { GEIGER, BOARD_MAP }
@@ -128,6 +128,7 @@ object VoiceCommand {
 
         if (geiger || has("find the wire", "find wire", "find live", "live wire", "hidden wire", "before i drill",
                 "drill")) return Command.Open(Place.GEIGER)
+        if (has("house", "house view", "rooms", "whole house")) return Command.Open(Place.HOUSE)
         if (map || has("photo", "board", "picture")) return Command.Open(Place.BOARD_MAP)
         if (has("history", "past", "old readings", "earlier", "log")) return Command.Open(Place.HISTORY)
         if (has("circuits", "boards", "rename")) return Command.Open(Place.CIRCUITS)
@@ -194,7 +195,7 @@ object VoiceCommand {
         return "<|im_start|>system\n" +
             "You turn an electrician's spoken request into one command for the Taar app. Reply with exactly one " +
             "line from this list, with a circuit name from the list of circuits where one is meant, and nothing else:\n" +
-            "measure <circuit>\nrecord normal <circuit>\nopen board map\nopen geiger mode\nopen history\ngo home\n" +
+            "measure <circuit>\nrecord normal <circuit>\nopen board map\nopen house view\nopen geiger mode\nopen history\ngo home\n" +
             "calibrate amps\nwhich wires have a problem\nhow much does <circuit> cost\n" +
             "<circuit> runs <number> hours a day\nsay that again\nask <the question, if it is a question>\n" +
             "Circuits: $names.<|im_end|>\n" +
@@ -209,7 +210,7 @@ object VoiceCommand {
 
     /** What the technician can say, for Help and for when nothing matched. */
     const val EXAMPLES = "You can say: measure kitchen, next circuit, record normal, why, what should I do, " +
-        "which wires have a problem, how much does the AC cost, open board map, Geiger mode, or stop listening."
+        "which wires have a problem, how much does the AC cost, open board map, house view, Geiger mode, or stop listening."
 
     // ---- words ----
 
@@ -275,7 +276,7 @@ object VoiceCommand {
      */
     fun vocabulary(circuitLabels: List<String>): List<String> {
         val fixed = ("measure measuring measurement check test reading read inspect record normal reference save set " +
-            "open show go to take me start begin stop listening board map photo picture geiger mode wire wires finder " +
+            "open show go to take me start begin stop listening board map photo picture house rooms geiger mode wire wires finder " +
             "find live hidden drill history home back main close tools settings calibrate amps cable scan phone view " +
             "help what can i you say that again repeat which have has a an the is are there any it ok okay fine " +
             "working problem problems wrong fault issue danger how much does do cost costs bill rupees rupee rate " +

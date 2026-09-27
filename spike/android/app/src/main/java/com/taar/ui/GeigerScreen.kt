@@ -162,7 +162,7 @@ fun GeigerScreen(stream: MagStream, onBack: () -> Unit) {
                 SectionLabel("Last 10 seconds", Modifier.weight(1f))
                 Text(
                     "strongest ${times(peak)}", style = MaterialTheme.typography.labelMedium,
-                    fontFamily = FontFamily.Monospace, color = TaarPalette.Grey,
+                    fontWeight = FontWeight.Medium, color = TaarPalette.Grey,
                 )
             }
             History(history, scale)
@@ -210,7 +210,7 @@ fun GeigerScreen(stream: MagStream, onBack: () -> Unit) {
 
 private fun zoneColour(zone: Geiger.Zone) = when (zone) {
     Geiger.Zone.QUIET -> TaarPalette.Grey
-    Geiger.Zone.NEAR -> TaarPalette.Yellow
+    Geiger.Zone.NEAR -> TaarPalette.Amber
     Geiger.Zone.CLOSE -> TaarPalette.Red
 }
 
@@ -240,7 +240,7 @@ private fun Gauge(level: Double, contrast: Double, zone: Geiger.Zone, clicks: In
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
                 if (!started) "–" else if (contrast >= 10) "%.0f×".format(contrast) else "%.1f×".format(contrast),
-                fontSize = 52.sp, fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Monospace, color = colour,
+                fontSize = 52.sp, fontWeight = FontWeight.SemiBold, color = colour,
             )
             Text("50 Hz signal", style = MaterialTheme.typography.labelMedium, color = TaarPalette.Grey)
         }
@@ -250,7 +250,7 @@ private fun Gauge(level: Double, contrast: Double, zone: Geiger.Zone, clicks: In
 /** The recent levels as a line, with the "very close" level dashed. */
 @Composable
 private fun History(points: List<Double>, scale: Geiger.Scale) {
-    Canvas(Modifier.fillMaxWidth().height(80.dp).background(Color(0xFF12161D), MaterialTheme.shapes.small)) {
+    Canvas(Modifier.fillMaxWidth().height(80.dp).background(TaarPalette.Panel, MaterialTheme.shapes.small)) {
         val w = size.width
         val h = size.height
         val close = h * (1f - Geiger.Zone.CLOSE_LEVEL.toFloat())
@@ -264,7 +264,7 @@ private fun History(points: List<Double>, scale: Geiger.Scale) {
             val y = h * (1f - scale.level(c).toFloat()) * 0.94f + h * 0.03f
             if (i == 0) path.moveTo(x0, y) else path.lineTo(x0 + i * dx, y)
         }
-        drawPath(path, TaarPalette.Yellow, style = Stroke(width = 4f))
+        drawPath(path, TaarPalette.Glow, style = Stroke(width = 4f))
     }
 }
 
@@ -273,12 +273,12 @@ private fun Chip(label: String, on: Boolean, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
         shape = CircleShape,
-        color = if (on) TaarPalette.Yellow.copy(alpha = 0.14f) else TaarPalette.Surface,
-        border = BorderStroke(1.dp, if (on) TaarPalette.Yellow.copy(alpha = 0.6f) else TaarPalette.Outline),
+        color = if (on) TaarPalette.Ink else TaarPalette.Surface,
+        border = BorderStroke(1.dp, if (on) TaarPalette.Ink else TaarPalette.Outline),
     ) {
         Text(
             (if (on) "$label on" else "$label off"), style = MaterialTheme.typography.labelLarge,
-            color = if (on) TaarPalette.Yellow else TaarPalette.Grey,
+            color = if (on) TaarPalette.OnAccent else TaarPalette.Grey,
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
         )
     }

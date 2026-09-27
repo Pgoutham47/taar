@@ -358,6 +358,7 @@ class VoiceAgent(private val vm: TaarViewModel, private val voice: ResultVoice) 
         VoiceCommand.Place.ASK -> "Taar AI"
         VoiceCommand.Place.HISTORY -> "history"
         VoiceCommand.Place.BOARD_MAP -> "the board map"
+        VoiceCommand.Place.HOUSE -> "the house view"
         VoiceCommand.Place.GEIGER -> "Geiger mode"
         VoiceCommand.Place.CIRCUITS -> "circuits"
         VoiceCommand.Place.CALIBRATE -> "calibration"
@@ -386,7 +387,7 @@ fun VoiceLayer(input: VoiceInput, agent: VoiceAgent, bottom: Dp, onMic: () -> Un
                 input.listening -> Bubble {
                     Text("Listening…", style = MaterialTheme.typography.labelLarge, color = TaarPalette.Yellow)
                     Text(input.partial.ifEmpty { "Say, for example: measure kitchen" },
-                        style = MaterialTheme.typography.bodyLarge, color = if (input.partial.isEmpty()) TaarPalette.Grey else Color.White)
+                        style = MaterialTheme.typography.bodyLarge, color = if (input.partial.isEmpty()) TaarPalette.Grey else TaarPalette.Text)
                     if (agent.conversation) {
                         Text("Say “stop listening” to end", style = MaterialTheme.typography.bodySmall, color = TaarPalette.Grey)
                     }
@@ -395,7 +396,7 @@ fun VoiceLayer(input: VoiceInput, agent: VoiceAgent, bottom: Dp, onMic: () -> Un
                     if (shown.first.isNotBlank()) {
                         Text("“${shown.first}”", style = MaterialTheme.typography.bodySmall, color = TaarPalette.Grey)
                     }
-                    Text(shown.second, style = MaterialTheme.typography.bodyLarge, color = Color.White)
+                    Text(shown.second, style = MaterialTheme.typography.bodyLarge, color = TaarPalette.Text)
                 }
             }
             MicButton(input, agent.conversation, onMic)
@@ -406,7 +407,7 @@ fun VoiceLayer(input: VoiceInput, agent: VoiceAgent, bottom: Dp, onMic: () -> Un
 @Composable
 private fun Bubble(onClick: (() -> Unit)? = null, content: @Composable () -> Unit) {
     Surface(
-        shape = MaterialTheme.shapes.large, color = TaarPalette.SurfaceHigh,
+        shape = MaterialTheme.shapes.large, color = TaarPalette.Surface, shadowElevation = 3.dp,
         border = BorderStroke(1.dp, TaarPalette.Outline),
         modifier = Modifier.widthIn(max = 300.dp).let { if (onClick != null) it.clickable(onClick = onClick) else it },
     ) {
@@ -433,7 +434,7 @@ private fun MicButton(input: VoiceInput, conversation: Boolean, onMic: () -> Uni
         if (!input.ready && input.failed == null) {
             CircularProgressIndicator(Modifier.size(28.dp), color = TaarPalette.Grey, strokeWidth = 3.dp)
         } else {
-            MicGlyph(if (input.ready) Color(0xFF14110A) else TaarPalette.Grey)
+            MicGlyph(if (input.ready) TaarPalette.OnAccent else TaarPalette.Grey)
         }
     }
 }

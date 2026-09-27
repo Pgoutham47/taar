@@ -139,7 +139,7 @@ fun PreCheckScreen(state: PreCheckState, onRun: () -> Unit, onDone: () -> Unit) 
                     state.magRequestedRateHz, state.phases, state.magJitter * 100,
                 ),
                 style = MaterialTheme.typography.labelSmall,
-                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Medium,
                 color = TaarPalette.Grey,
             )
         }

@@ -259,7 +259,7 @@ private fun IndividualResults(state: TaarViewModel.UiState, reading: Reading, ci
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("Signal", style = MaterialTheme.typography.titleSmall)
                 Text("%.0f×".format(contrast), style = MaterialTheme.typography.titleSmall,
-                    fontFamily = FontFamily.Monospace)
+                    fontWeight = FontWeight.Medium)
             }
             SignalMeter(contrast)
         }
@@ -340,7 +340,7 @@ private fun AiSoundCard(probability: Float?, ruleFlaggedArc: Boolean, line: Line
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("On-device AI · sound", style = MaterialTheme.typography.titleSmall)
                 Text("arc-like ${(probability * 100).roundToInt()}%", style = MaterialTheme.typography.titleSmall,
-                    fontFamily = FontFamily.Monospace)
+                    fontWeight = FontWeight.Medium)
             }
             Text(
                 if (arcLike) "Sounds like sparking" else "No sparking sound",
@@ -484,7 +484,7 @@ private fun Details(state: TaarViewModel.UiState, reading: Reading, circuit: Cir
                     style = MaterialTheme.typography.titleSmall)
                 Hint("Learned from your own answers below. A hint only; the result above is what to act on.")
                 Text("distance %.2f · margin %.2f".format(it.distance, it.margin),
-                    style = MaterialTheme.typography.labelSmall, fontFamily = FontFamily.Monospace,
+                    style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Medium,
                     color = TaarPalette.Grey)
             }
         }
@@ -572,7 +572,7 @@ private fun CostCard(
                         color = TaarPalette.Yellow)
                     Text(
                         "%.1f A · %.2f kW · %.0f units a month".format(e.amps, e.kilowatts, e.unitsPerMonth),
-                        style = MaterialTheme.typography.bodyMedium, color = TaarPalette.Grey, fontFamily = FontFamily.Monospace,
+                        style = MaterialTheme.typography.bodyMedium, color = TaarPalette.Grey, fontWeight = FontWeight.Medium,
                     )
                 }
                 Text("Runs how long each day?", style = MaterialTheme.typography.labelLarge, color = TaarPalette.Grey)

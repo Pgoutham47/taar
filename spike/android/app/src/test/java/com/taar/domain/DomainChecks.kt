@@ -85,6 +85,12 @@ object DomainChecks {
         boardMapPrefersANewerReading(),
         boardMapUnmeasuredAndSummary(),
         boardMapNumbersInTapOrder(),
+        houseLayoutGivesEveryRoomItsOwnCell(),
+        houseWiresAreDiagramsFromTheBoard(),
+        houseFlowComesOnlyFromReadings(),
+        houseSummaryAndCaptions(),
+        houseKindIsOnlyACaption(),
+        houseCameraTurnsTiltsAndClamps(),
         spokenResultNeverCallsAWireSafe(),
         spokenResultLeadsWithWarnings(),
         spokenResultSaysAmpsOnlyWhenFlowing(),
@@ -1146,6 +1152,128 @@ object DomainChecks {
         }
     }
 
+    // ---- house view ----
+
+    fun houseLayoutGivesEveryRoomItsOwnCell() = check("house: every circuit gets its own room, front row first, in board order") {
+        fun circuits(n: Int) = (1..n).map { Circuit("c$it", "Room $it") }
+        val overlapping = (1..12).firstOrNull { n -> HouseView.overlaps(HouseView.layout(circuits(n))) }
+        val five = HouseView.layout(circuits(5))
+        when {
+            overlapping != null -> "$overlapping circuits overlap"
+            five.cols != 3 || five.rows != 2 -> "5 rooms laid out ${five.cols}x${five.rows}"
+            five.rooms.take(3).any { it.cell.row != 1 } -> "front row not filled first: ${five.rooms.map { it.cell }}"
+            five.rooms.map { it.circuitId } != listOf("c1", "c2", "c3", "c4", "c5") -> "board order lost"
+            HouseView.layout(emptyList()).rooms.isNotEmpty() -> "rooms from no circuits"
+            else -> null
+        }
+    }
+
+    fun houseWiresAreDiagramsFromTheBoard() = check("house: each wire runs board to room in straight segments, and a tap finds its room") {
+        val l = HouseView.layout(listOf(Circuit("k", "Kitchen"), Circuit("b", "Bedroom"), Circuit("g", "Geyser"),
+            Circuit("h", "Hall"), Circuit("p", "Pump")))
+        val wires = l.rooms.map { l.wire(it) }
+        val tapped = l.rooms.map { l.roomAt(HouseView.project(it.anchor), 0.3)?.circuitId }
+        when {
+            wires.any { it.first() != l.board } -> "a wire does not start at the board"
+            wires.zip(l.rooms).any { (w, r) -> w.last() != r.centre } -> "a wire does not end in its room"
+            wires.any { !HouseView.isOrthogonal(it) } -> "a wire has a diagonal segment"
+            wires.map { it[1].x }.toSet().size != wires.size -> "two wires share a riser"
+            tapped != l.rooms.map { it.circuitId } -> "taps found $tapped"
+            l.roomAt(HouseView.project(l.board), 0.3) != null -> "the board counts as a room"
+            l.extent(HouseView.Camera.DEFAULT).let { it.width <= 0 || it.height <= 0 } -> "nothing to fit to"
+            l.extent(HouseView.Camera.DEFAULT) == l.extent(HouseView.Camera.DEFAULT.orbit(90.0, 0.0)) -> "turning does not change the extent"
+            else -> null
+        }
+    }
+
+    fun houseFlowComesOnlyFromReadings() = check("house: a room glows only from a reading; amperes only when calibrated and flowing") {
+        val plain = Circuit("c", "Kitchen", breakerRatingA = 16.0)
+        val calibrated = plain.copy(utPerAmp = 2.0)
+        fun reading(confidence: Double, fieldUt: Double) =
+            Reading("c", 5L, fieldAmplitudeUt = fieldUt, lineConfidence = confidence, arcModulationIndex = 0.0)
+        val live = BoardMap.Dot(BoardMap.Mark.LIVE, 5L, null)
+        val off = BoardMap.Dot(BoardMap.Mark.OFF, 5L, null)
+        val dark = HouseView.flowOf(plain, BoardMap.dotOf(null, null), null)
+        val idle = HouseView.flowOf(plain, off, reading(0.1, 0.2))
+        val unclear = HouseView.flowOf(plain, BoardMap.Dot(BoardMap.Mark.UNCLEAR, 5L, null), reading(0.5, 0.5))
+        val weak = HouseView.flowOf(plain, live, reading(0.65, 5.0))
+        val strong = HouseView.flowOf(plain, live, reading(0.99, 5.0))
+        val half = HouseView.flowOf(calibrated, live, reading(0.9, 16.0))   // 8 A of 16
+        val over = HouseView.flowOf(calibrated, live, reading(0.9, 40.0))   // 20 A of 16
+        val idleCalibrated = HouseView.flowOf(calibrated, off, reading(0.1, 0.3))
+        val halfAmps = half.amps
+        val halfLoad = half.loadFraction
+        when {
+            dark.intensity != 0.0 || dark.flowing -> "an unmeasured room is lit"
+            idle.intensity != 0.0 || idle.amps != null -> "no current, yet lit: ${idle.intensity}"
+            unclear.intensity <= 0.0 || unclear.flowing -> "unclear gave ${unclear.intensity}"
+            !weak.flowing || weak.amps != null -> "uncalibrated flow gave amps ${weak.amps}, intensity ${weak.intensity}"
+            strong.intensity <= weak.intensity -> "a stronger line signal is not brighter"
+            halfAmps == null || abs(halfAmps - 8.0) > 1e-9 -> "amps $halfAmps"
+            halfLoad == null || abs(halfLoad - 0.5) > 1e-9 -> "load fraction $halfLoad"
+            over.intensity != 1.0 -> "an overload is not clamped at 1: ${over.intensity}"
+            half.intensity <= HouseView.MIN_FLOWING || half.intensity >= over.intensity -> "load does not set brightness"
+            idleCalibrated.amps != null -> "an idle calibrated circuit was given amperes"
+            else -> null
+        }
+    }
+
+    fun houseSummaryAndCaptions() = check("house: the summary counts rooms and sums only calibrated amperes") {
+        fun flow(mark: BoardMap.Mark, intensity: Double, amps: Double? = null) =
+            HouseView.Flow(mark, intensity, amps, null, 1L, null)
+        val flows = listOf(
+            flow(BoardMap.Mark.LIVE, 0.6, 5.2), flow(BoardMap.Mark.LIVE, 0.4), flow(BoardMap.Mark.OFF, 0.0),
+            flow(BoardMap.Mark.PROBLEM, 0.8, 2.3), flow(BoardMap.Mark.NOT_MEASURED, 0.0),
+        )
+        val s = HouseView.summary(flows)
+        when {
+            s != "3 of 5 rooms drawing current · 7.5 A on calibrated circuits · 1 problem" -> "summary '$s'"
+            HouseView.summary(emptyList()) != "" -> "a summary of nothing"
+            HouseView.caption(flows[0]) != "5.2 A" -> "caption ${HouseView.caption(flows[0])}"
+            HouseView.caption(flows[1]) != "Current flowing" -> "uncalibrated caption ${HouseView.caption(flows[1])}"
+            HouseView.caption(flows[4]) != "Not measured" -> "unmeasured caption ${HouseView.caption(flows[4])}"
+            else -> null
+        }
+    }
+
+    fun houseCameraTurnsTiltsAndClamps() = check("house: the camera turns the house, tilts within limits, and a turned wall changes face") {
+        val home = HouseView.Camera.DEFAULT
+        val around = home.orbit(180.0, 0.0)
+        val right = HouseView.Point3(1.0, 0.0)
+        val front = HouseView.Point(0.0, 1.0)   // outward normal of a wall on the near side
+        val top = home.orbit(0.0, 1000.0)
+        val flat = home.orbit(0.0, -1000.0)
+        val l = HouseView.layout(listOf(Circuit("a", "A"), Circuit("b", "B"), Circuit("c", "C")))
+        val tapTurned = l.rooms.map { l.roomAt(HouseView.project(it.anchor, around), 0.3, around)?.circuitId }
+        val nearer = HouseView.depth(HouseView.Point3(0.0, 2.0), home) > HouseView.depth(HouseView.Point3(0.0, 0.0), home)
+        when {
+            HouseView.project(right, home).x <= 0 -> "default view has +x on the left"
+            HouseView.project(right, around).x >= 0 -> "turning 180 did not swap sides"
+            !HouseView.facesViewer(front, home) -> "the near wall does not face the eye"
+            HouseView.facesViewer(front, around) -> "the near wall still faces the eye after turning round"
+            top.pitchDeg != HouseView.Camera.MAX_PITCH || flat.pitchDeg != HouseView.Camera.MIN_PITCH -> "tilt not clamped: $top $flat"
+            home.zoomed(100.0).zoom != HouseView.Camera.MAX_ZOOM || home.zoomed(0.0).zoom != HouseView.Camera.MIN_ZOOM -> "zoom not clamped"
+            tapTurned != l.rooms.map { it.circuitId } -> "taps miss after turning: $tapTurned"
+            !nearer -> "a point towards the viewer is not nearer"
+            HouseView.project(HouseView.Point3(0.0, 0.0, 1.0), home).y >= HouseView.project(HouseView.Point3(0.0, 0.0), home).y -> "up is not up"
+            else -> null
+        }
+    }
+
+    fun houseKindIsOnlyACaption() = check("house: a room's kind comes from its name and is only a caption") {
+        val kinds = listOf("Kitchen", "Bedroom AC", "Geyser", "Left black plug", "Hall lights", "Water pump", "Circuit 1")
+            .map { HouseView.Kind.of(it) }
+        val expected = listOf(
+            HouseView.Kind.KITCHEN, HouseView.Kind.COOLING, HouseView.Kind.HEATING, HouseView.Kind.SOCKETS,
+            HouseView.Kind.LIGHTS, HouseView.Kind.MOTOR, HouseView.Kind.ROOM,
+        )
+        when {
+            kinds != expected -> "kinds $kinds"
+            HouseView.Kind.entries.any { it.caption.isBlank() } -> "a kind has no caption"
+            else -> null
+        }
+    }
+
     fun spokenResultNeverCallsAWireSafe() = check("spoken result: no sentence ever calls a wire safe") {
         val all = Fusion.Outcome.entries.flatMap { o ->
             LineState.entries.map { l -> SpokenResult.of(o, l, "Kitchen", 3.0) }
@@ -1232,6 +1360,8 @@ object DomainChecks {
             "measure" to VoiceCommand.Command.Measure(null),
             "record normal for the a c" to VoiceCommand.Command.RecordNormal("ac"),
             "open board map" to VoiceCommand.Command.Open(VoiceCommand.Place.BOARD_MAP),
+            "open house view" to VoiceCommand.Command.Open(VoiceCommand.Place.HOUSE),
+            "show the rooms" to VoiceCommand.Command.Open(VoiceCommand.Place.HOUSE),
             "start geiger mode" to VoiceCommand.Command.Open(VoiceCommand.Place.GEIGER),
             "go home" to VoiceCommand.Command.Open(VoiceCommand.Place.HOME),
             "show history" to VoiceCommand.Command.Open(VoiceCommand.Place.HISTORY),

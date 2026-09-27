@@ -13,17 +13,17 @@ here are checked rather than hoped for.
 | Layer | Compiles | Tested |
 |---|---|---|
 | `dsp/` | ✅ | ✅ 14 checks against golden vectors from the Python spike, including the arc model's features on real iQOO captures |
-| `domain/` | ✅ | ✅ 69 checks on rules, thresholds, calibration, stats, store, classifier, motion, fusion, cable scan, the assistant prompts and product knowledge |
+| `domain/` | ✅ | ✅ 105 checks on rules, thresholds, calibration, stats, store, classifier, motion, fusion, cable scan, Geiger, Board Map, House View, voice, the assistant prompts and product knowledge |
 | `sensor/` | ✅ | ❌ needs hardware — first run is on the loaner |
 | `ui/` | ✅ | ❌ no instrumentation tests |
 | `data/` | ✅ | ❌ one file over `Context` |
 
 ```bash
 ./gradlew clean assembleDebug testDebugUnitTest    # BUILD SUCCESSFUL, 23 MB APK (arm64: LiteRT + LLM engine, compressed)
-./tools/verify.sh                                   # 83/83, no Android SDK needed
+./tools/verify.sh                                   # 119/119, no Android SDK needed
 ```
 
-The whole app compiles and packages. **83 of 83 logic checks pass.** What remains
+The whole app compiles and packages. **119 of 119 logic checks pass.** What remains
 unverified is behaviour that only a phone can show: whether the magnetometer
 delivers a usable rate, what the real noise floor is, whether the field deflects at
 3 cm, and whether `UNPROCESSED` audio survives the device's chain. Those are the
@@ -76,6 +76,8 @@ app/src/main/java/com/taar/
     FaultCatalogue.kt  6 faults, their evidence rules and actions
     Classifier.kt      nearest-centroid, trained on the technician's own labels
     Store.kt           versioned line format, FileSystem interface
+    BoardMap.kt        breaker positions on the board photo, and each circuit's dot
+    HouseView.kt       circuits as the rooms of a house: layout, wires, camera, and what lights them
   sensor/       MagCapture, AudioCapture, CaptureCoordinator
   ui/           MainActivity, PreCheck, Measure, Result, Boards, Circuits,
                 History, SpectrogramView

@@ -22,6 +22,14 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
@@ -62,7 +70,7 @@ import com.taar.ml.TaarAssistant
  */
 class MainActivity : ComponentActivity() {
 
-    enum class Screen { HOME, PHONE_CHECK, CIRCUITS, REFERENCE, MEASURE, CABLE_SCAN, LIVE, CALIBRATE, GEIGER, BOARD_MAP }
+    enum class Screen { HOME, PHONE_CHECK, CIRCUITS, REFERENCE, MEASURE, CABLE_SCAN, LIVE, CALIBRATE, GEIGER, BOARD_MAP, HOUSE }
 
     enum class Tab(val label: String) { HOME("Home"), TOOLS("Tools"), ASK("Ask AI"), HISTORY("History") }
 
@@ -130,13 +138,14 @@ class MainActivity : ComponentActivity() {
                     var screen by remember { mutableStateOf(Screen.HOME) }
                     var tab by rememberSaveable { mutableStateOf(Tab.HOME) }
                     val state by viewModel.state.collectAsState()
-                    // Screens opened from the Board Map go back to it, not to Home.
-                    var fromMap by remember { mutableStateOf(false) }
+                    // Screens opened from the Board Map or the House View go back to it, not to Home.
+                    var returnTo by remember { mutableStateOf<Screen?>(null) }
                     val home: () -> Unit = {
-                        if (fromMap && screen != Screen.BOARD_MAP) {
-                            screen = Screen.BOARD_MAP
+                        val back = returnTo
+                        if (back != null && screen != back) {
+                            screen = back
                         } else {
-                            fromMap = false
+                            returnTo = null
                             screen = Screen.HOME
                         }
                     }
@@ -152,9 +161,9 @@ class MainActivity : ComponentActivity() {
                     BackHandler(enabled = screen == Screen.HOME && tab != Tab.HOME) { tab = Tab.HOME }
 
                     // Voice goes where a tap would. Opening a mode by voice switches it on.
-                    agent.openScreen = { fromMap = false; screen = it }
+                    agent.openScreen = { returnTo = null; screen = it }
                     agent.navigate = { place ->
-                        fromMap = false
+                        returnTo = null
                         when (place) {
                             VoiceCommand.Place.HOME -> { screen = Screen.HOME; tab = Tab.HOME }
                             VoiceCommand.Place.TOOLS -> { screen = Screen.HOME; tab = Tab.TOOLS }
@@ -164,6 +173,7 @@ class MainActivity : ComponentActivity() {
                                 if (!state.boardMapEnabled) viewModel.setBoardMapEnabled(true)
                                 screen = Screen.BOARD_MAP
                             }
+                            VoiceCommand.Place.HOUSE -> screen = Screen.HOUSE
                             VoiceCommand.Place.GEIGER -> {
                                 if (!state.geigerEnabled) viewModel.setGeigerEnabled(true)
                                 screen = Screen.GEIGER
@@ -313,10 +323,29 @@ class MainActivity : ComponentActivity() {
                                 onRemove = { viewModel.removePin(it) },
                                 onMeasure = { circuit ->
                                     state.installation?.let { viewModel.selectCircuit(it.id, circuit.id) }
-                                    fromMap = true
+                                    returnTo = Screen.BOARD_MAP
                                     screen = if (circuit.baseline?.isSufficient == true) Screen.MEASURE else Screen.REFERENCE
                                 },
-                                onCircuits = { fromMap = true; screen = Screen.CIRCUITS },
+                                onCircuits = { returnTo = Screen.BOARD_MAP; screen = Screen.CIRCUITS },
+                                onBack = home,
+                            )
+                        }
+
+                        Screen.HOUSE -> {
+                            LaunchedEffect(state.installation?.id) { viewModel.openBoardMap() }
+                            HouseScreen(
+                                state = state,
+                                onMeasure = { circuit ->
+                                    state.installation?.let { viewModel.selectCircuit(it.id, circuit.id) }
+                                    returnTo = Screen.HOUSE
+                                    screen = if (circuit.baseline?.isSufficient == true) Screen.MEASURE else Screen.REFERENCE
+                                },
+                                onBoardMap = {
+                                    if (!state.boardMapEnabled) viewModel.setBoardMapEnabled(true)
+                                    returnTo = Screen.HOUSE
+                                    screen = Screen.BOARD_MAP
+                                },
+                                onCircuits = { returnTo = Screen.HOUSE; screen = Screen.CIRCUITS },
                                 onBack = home,
                             )
                         }
@@ -335,7 +364,7 @@ class MainActivity : ComponentActivity() {
                         }
 
                     }
-                    VoiceLayer(voiceInput, agent, bottom = if (screen == Screen.HOME) 96.dp else 16.dp, onMic = {
+                    VoiceLayer(voiceInput, agent, bottom = if (screen == Screen.HOME) 108.dp else 16.dp, onMic = {
                         // One tap starts a conversation; another ends it.
                         if (agent.conversation || voiceInput.listening) {
                             voiceInput.cancel()
@@ -405,33 +434,8 @@ private fun Tabs(
     onTab: (MainActivity.Tab) -> Unit,
     content: @androidx.compose.runtime.Composable () -> Unit,
 ) {
-    Column(Modifier.fillMaxSize()) {
+    Column(Modifier.fillMaxSize().background(TaarPalette.Background)) {
         Box(Modifier.weight(1f).fillMaxWidth()) { content() }
-        HorizontalDivider(color = TaarPalette.Outline)
-        NavigationBar(containerColor = TaarPalette.Surface, tonalElevation = androidx.compose.ui.unit.Dp(0f)) {
-            for (t in MainActivity.Tab.entries) {
-                NavigationBarItem(
-                    selected = t == current,
-                    onClick = { onTab(t) },
-                    icon = {
-                        Icon(
-                            when (t) {
-                                MainActivity.Tab.HOME -> Icons.Filled.Home
-                                MainActivity.Tab.TOOLS -> Icons.Filled.Build
-                                MainActivity.Tab.ASK -> Icons.Filled.Star
-                                MainActivity.Tab.HISTORY -> Icons.AutoMirrored.Filled.List
-                            },
-                            contentDescription = null,
-                        )
-                    },
-                    label = { Text(t.label) },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = TaarPalette.Yellow, selectedTextColor = TaarPalette.Yellow,
-                        indicatorColor = TaarPalette.Yellow.copy(alpha = 0.14f),
-                        unselectedIconColor = TaarPalette.Faint, unselectedTextColor = TaarPalette.Faint,
-                    ),
-                )
-            }
-        }
+        TaarNavBar(current, onTab)
     }
 }

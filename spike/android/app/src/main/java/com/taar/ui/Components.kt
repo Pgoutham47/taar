@@ -49,7 +49,7 @@ import androidx.compose.material3.Shapes
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.Typography
-import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -75,42 +75,58 @@ import kotlin.math.ln
  * Taar's design system: colours, type, shapes and the handful of pieces every
  * screen is built from, so the whole app reads as one instrument.
  *
- * Dark by design: it is used in basements and plant rooms, and a bright screen in
- * a dim room is the thing a technician notices first.
+ * Light and quiet: a soft grey ground, white cards with a faint shadow, one ink
+ * accent for anything tappable, and colour reserved for meaning (green, amber,
+ * red, blue). The signal plots, the Geiger trace, the House View and the board
+ * photo stay dark: they are instrument panels, and traces read best on black.
  */
 object TaarPalette {
-    val Background = Color(0xFF0B0E14)
-    val Surface = Color(0xFF141923)
-    val SurfaceHigh = Color(0xFF1B212D)
-    val Outline = Color(0xFF262D3A)
-    val Text = Color(0xFFF2F4F8)
-    val Grey = Color(0xFFA0A8B8)
-    val Faint = Color(0xFF6B7385)
+    val Background = Color(0xFFF3F4F6)
+    val Surface = Color(0xFFFFFFFF)
+    val SurfaceHigh = Color(0xFFEDEFF3)
+    val Outline = Color(0xFFE4E7EC)
+    val Text = Color(0xFF121417)
+    // Text levels, each at least 4.5:1 on white, the grey ground and SurfaceHigh:
+    // Text 18:1, Grey 7.5:1, Faint 5:1. Faint is for small print, never below that.
+    val Grey = Color(0xFF4B5563)
+    val Faint = Color(0xFF646B76)
 
-    val Yellow = Color(0xFFFFC940)   // brand yellow
-    val Green = Color(0xFF34D399)
-    val Amber = Color(0xFFF5A524)
-    val Red = Color(0xFFF87171)
-    val Blue = Color(0xFF60A5FA)
+    /** The one accent: ink. Buttons, links, the active step, the progress ring. */
+    val Ink = Color(0xFF1B1D22)
+    val OnAccent = Color(0xFFFFFFFF)
+    /** Kept under its old name so every screen's accent moved to ink in one change. */
+    val Yellow = Ink
 
-    val RedSurface = Color(0xFF2A1719)
-    val AmberSurface = Color(0xFF2A2013)
-    val GreenSurface = Color(0xFF10251C)
-    val BlueSurface = Color(0xFF111C2C)
+    // Meaning colours, each at least 4.6:1 as text on white, the grey ground, its own
+    // tinted surface and its own pill.
+    val Green = Color(0xFF147B3B)
+    val Amber = Color(0xFFAD5009)
+    val Red = Color(0xFFCD2323)
+    val Blue = Color(0xFF2461E6)
+
+    val RedSurface = Color(0xFFFEF2F2)
+    val AmberSurface = Color(0xFFFFF7ED)
+    val GreenSurface = Color(0xFFECFDF3)
+    val BlueSurface = Color(0xFFEFF6FF)
+
+    /** For drawing on a dark panel only: the brand yellow the traces are drawn in. */
+    val Glow = Color(0xFFFFC940)
+    val Panel = Color(0xFF0B0E14)
+    val PanelHigh = Color(0xFF1B212D)
 }
 
-private val TaarColors = darkColorScheme(
-    primary = TaarPalette.Yellow,
-    onPrimary = Color(0xFF1A1300),
+private val TaarColors = lightColorScheme(
+    primary = TaarPalette.Ink,
+    onPrimary = TaarPalette.OnAccent,
     secondary = TaarPalette.Blue,
-    onSecondary = Color(0xFF06121F),
+    onSecondary = TaarPalette.OnAccent,
     background = TaarPalette.Background,
     onBackground = TaarPalette.Text,
     surface = TaarPalette.Background,
     onSurface = TaarPalette.Text,
     surfaceVariant = TaarPalette.SurfaceHigh,
     onSurfaceVariant = TaarPalette.Grey,
-    surfaceContainerLowest = TaarPalette.Background,
+    surfaceContainerLowest = TaarPalette.Surface,
     surfaceContainerLow = TaarPalette.Surface,
     surfaceContainer = TaarPalette.Surface,
     surfaceContainerHigh = TaarPalette.Surface,
@@ -120,12 +136,14 @@ private val TaarColors = darkColorScheme(
     error = TaarPalette.Red,
     secondaryContainer = TaarPalette.SurfaceHigh,
     onSecondaryContainer = TaarPalette.Text,
+    primaryContainer = TaarPalette.SurfaceHigh,
+    onPrimaryContainer = TaarPalette.Text,
 )
 
 private val TaarType = Typography().let { t ->
     t.copy(
-        headlineMedium = t.headlineMedium.copy(fontSize = 28.sp, lineHeight = 34.sp, fontWeight = FontWeight.SemiBold),
-        headlineSmall = t.headlineSmall.copy(fontSize = 24.sp, lineHeight = 30.sp, fontWeight = FontWeight.SemiBold),
+        headlineMedium = t.headlineMedium.copy(fontSize = 30.sp, lineHeight = 36.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.4).sp),
+        headlineSmall = t.headlineSmall.copy(fontSize = 24.sp, lineHeight = 30.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.2).sp),
         titleLarge = t.titleLarge.copy(fontSize = 20.sp, lineHeight = 26.sp, fontWeight = FontWeight.SemiBold),
         titleMedium = t.titleMedium.copy(fontSize = 16.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold),
         titleSmall = t.titleSmall.copy(fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.SemiBold),
@@ -139,11 +157,11 @@ private val TaarType = Typography().let { t ->
 }
 
 private val TaarShapes = Shapes(
-    extraSmall = RoundedCornerShape(8.dp),
-    small = RoundedCornerShape(12.dp),
-    medium = RoundedCornerShape(16.dp),
-    large = RoundedCornerShape(20.dp),
-    extraLarge = RoundedCornerShape(28.dp),
+    extraSmall = RoundedCornerShape(10.dp),
+    small = RoundedCornerShape(14.dp),
+    medium = RoundedCornerShape(18.dp),
+    large = RoundedCornerShape(24.dp),
+    extraLarge = RoundedCornerShape(32.dp),
 )
 
 @Composable
@@ -185,16 +203,22 @@ fun TaarScreen(
         // capture), so the title never jumps. Tab screens have no bar.
         val bar = onBack != null || bottomInset
         if (bar) {
-            Row(Modifier.fillMaxWidth().height(56.dp).padding(start = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                if (onBack != null) IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = TaarPalette.Text)
+            Row(Modifier.fillMaxWidth().height(64.dp).padding(start = Space.gutter), verticalAlignment = Alignment.CenterVertically) {
+                if (onBack != null) Surface(
+                    onClick = onBack, shape = CircleShape, color = TaarPalette.Surface, shadowElevation = 2.dp,
+                    modifier = Modifier.size(44.dp),
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = TaarPalette.Text,
+                            modifier = Modifier.size(22.dp))
+                    }
                 }
             }
         }
         Column(
             Modifier.fillMaxWidth().verticalScroll(scroll)
                 .padding(horizontal = Space.gutter)
-                .padding(top = if (bar) Space.xs else Space.xl, bottom = 32.dp),
+                .padding(top = if (bar) Space.xs else Space.xl, bottom = 104.dp),
             verticalArrangement = Arrangement.spacedBy(Space.l),
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(Space.xs)) {
@@ -226,7 +250,7 @@ fun accentOf(t: Tone) = when (t) {
     Tone.DANGER -> TaarPalette.Red
 }
 
-/** The one card: rounded, hairline outline, 18dp inside. */
+/** The one card: white, softly shadowed, 20dp inside. A toned card is tinted with a faint edge. */
 @Composable
 fun TaarCard(
     modifier: Modifier = Modifier,
@@ -234,14 +258,14 @@ fun TaarCard(
     onClick: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    val border = if (tone == Tone.NEUTRAL) TaarPalette.Outline else accentOf(tone).copy(alpha = 0.35f)
     Surface(
         modifier = modifier.fillMaxWidth().let { if (onClick != null) it.clip(MaterialTheme.shapes.large).clickable(onClick = onClick) else it },
         shape = MaterialTheme.shapes.large,
         color = surfaceOf(tone),
-        border = BorderStroke(1.dp, border),
+        border = if (tone == Tone.NEUTRAL) null else BorderStroke(1.dp, accentOf(tone).copy(alpha = 0.25f)),
+        shadowElevation = if (tone == Tone.NEUTRAL) 1.dp else 0.dp,
     ) {
-        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(Space.m), content = content)
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(Space.m), content = content)
     }
 }
 
@@ -256,7 +280,7 @@ fun SectionLabel(text: String, modifier: Modifier = Modifier) {
 fun StatusPill(text: String, tone: Tone) {
     val c = accentOf(tone)
     Row(
-        Modifier.clip(CircleShape).background(c.copy(alpha = 0.14f)).padding(horizontal = 10.dp, vertical = 4.dp),
+        Modifier.clip(CircleShape).background(c.copy(alpha = 0.10f)).padding(horizontal = 12.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
@@ -303,7 +327,8 @@ fun ListRow(
     ) {
         if (icon != null) {
             Box(
-                Modifier.size(40.dp).clip(MaterialTheme.shapes.small).background(iconTint.copy(alpha = 0.12f)),
+                Modifier.size(42.dp).clip(CircleShape)
+                    .background(if (iconTint == TaarPalette.Ink) TaarPalette.SurfaceHigh else iconTint.copy(alpha = 0.12f)),
                 contentAlignment = Alignment.Center,
             ) { Icon(icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(22.dp)) }
         }
@@ -328,8 +353,8 @@ fun PrimaryButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifi
         onClick = onClick,
         enabled = enabled,
         modifier = modifier.fillMaxWidth().height(56.dp),
-        shape = MaterialTheme.shapes.medium,
-        colors = ButtonDefaults.buttonColors(containerColor = colour, contentColor = Color(0xFF14110A),
+        shape = CircleShape,
+        colors = ButtonDefaults.buttonColors(containerColor = colour, contentColor = TaarPalette.OnAccent,
             disabledContainerColor = TaarPalette.SurfaceHigh, disabledContentColor = TaarPalette.Faint),
     ) { Text(text, style = MaterialTheme.typography.titleMedium) }
 }
@@ -340,8 +365,9 @@ fun SecondaryButton(text: String, onClick: () -> Unit, modifier: Modifier = Modi
         onClick = onClick,
         enabled = enabled,
         modifier = modifier.fillMaxWidth().height(52.dp),
-        shape = MaterialTheme.shapes.medium,
+        shape = CircleShape,
         border = BorderStroke(1.dp, TaarPalette.Outline),
+        colors = ButtonDefaults.outlinedButtonColors(containerColor = TaarPalette.Surface),
     ) { Text(text, style = MaterialTheme.typography.labelLarge, color = if (enabled) TaarPalette.Text else TaarPalette.Faint) }
 }
 
@@ -369,11 +395,11 @@ fun Instruction(number: Int, text: String) {
 @Composable
 private fun NumberBadge(text: String, colour: Color, filled: Boolean) {
     Box(
-        Modifier.size(26.dp).clip(CircleShape).background(if (filled) colour else colour.copy(alpha = 0.14f)),
+        Modifier.size(28.dp).clip(CircleShape).background(if (filled) colour else colour.copy(alpha = 0.10f)),
         contentAlignment = Alignment.Center,
     ) {
-        if (text == "✓") Icon(Icons.Filled.Check, null, tint = Color(0xFF0B0E14), modifier = Modifier.size(16.dp))
-        else Text(text, color = if (filled) Color(0xFF0B0E14) else colour, style = MaterialTheme.typography.labelLarge,
+        if (text == "✓") Icon(Icons.Filled.Check, null, tint = TaarPalette.OnAccent, modifier = Modifier.size(16.dp))
+        else Text(text, color = if (filled) TaarPalette.OnAccent else colour, style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.Bold)
     }
 }
@@ -476,19 +502,19 @@ fun SignalMeter(contrast: Double) {
             val r = CornerRadius(h / 2, h / 2)
             val xIdle = size.width * pos(idle)
             val xLive = size.width * pos(live)
-            drawRoundRect(TaarPalette.Faint.copy(alpha = 0.5f), Offset(0f, top), Size(xIdle, h), r)
-            drawRect(TaarPalette.Amber.copy(alpha = 0.6f), Offset(xIdle, top), Size(xLive - xIdle, h))
-            drawRoundRect(TaarPalette.Yellow.copy(alpha = 0.85f), Offset(xLive, top), Size(size.width - xLive, h), r)
+            drawRoundRect(Color(0xFFD5D9E0), Offset(0f, top), Size(xIdle, h), r)
+            drawRect(TaarPalette.Amber.copy(alpha = 0.55f), Offset(xIdle, top), Size(xLive - xIdle, h))
+            drawRoundRect(TaarPalette.Ink, Offset(xLive, top), Size(size.width - xLive, h), r)
             val x = size.width * pos(contrast)
-            drawCircle(Color.White, radius = 9.dp.toPx(), center = Offset(x, size.height / 2))
-            drawCircle(TaarPalette.Background, radius = 5.dp.toPx(), center = Offset(x, size.height / 2))
+            drawCircle(TaarPalette.Ink, radius = 9.dp.toPx(), center = Offset(x, size.height / 2))
+            drawCircle(Color.White, radius = 5.dp.toPx(), center = Offset(x, size.height / 2))
         }
         Row(Modifier.fillMaxWidth()) {
             Text("No current", style = MaterialTheme.typography.labelSmall, color = TaarPalette.Grey,
                 modifier = Modifier.weight(pos(idle)))
             Text("Unclear", style = MaterialTheme.typography.labelSmall, color = TaarPalette.Amber,
                 modifier = Modifier.weight(pos(live) - pos(idle) + 0.08f))
-            Text("Current flowing", style = MaterialTheme.typography.labelSmall, color = TaarPalette.Yellow,
+            Text("Current flowing", style = MaterialTheme.typography.labelSmall, color = TaarPalette.Text,
                 modifier = Modifier.weight(1f - pos(live)))
         }
         Hint("Below ${times(idle)} is room noise. Above ${times(live)} means current is flowing.")
@@ -507,17 +533,41 @@ fun times(contrast: Double): String =
 @Composable
 fun Metric(label: String, value: String, explain: String? = null, mono: Boolean = true) {
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        // Label on the left, value right-aligned in a column of its own, so a long value
+        // wraps inside its column instead of pushing the label. Roboto's digits are all
+        // one width, so numbers still line up without a monospace font.
         Row(
             Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(Space.m),
             verticalAlignment = Alignment.Top,
         ) {
-            Text(label, style = MaterialTheme.typography.bodyMedium, color = TaarPalette.Grey, maxLines = 1,
+            Text(label, style = MaterialTheme.typography.bodyMedium, color = TaarPalette.Grey, maxLines = 2,
                 modifier = Modifier.weight(1f))
-            Text(value, style = if (mono) MaterialTheme.typography.bodyMedium.merge(TextStyle(fontFamily = FontFamily.Monospace))
-                else MaterialTheme.typography.bodyMedium, color = TaarPalette.Text)
+            Text(value, style = MaterialTheme.typography.bodyMedium,
+                fontWeight = if (mono) FontWeight.Medium else FontWeight.Normal, color = TaarPalette.Text,
+                textAlign = TextAlign.End, modifier = Modifier.weight(1.3f, fill = false))
         }
         explain?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = TaarPalette.Faint) }
+    }
+}
+
+/**
+ * A strip of figures in equal columns, value over label, on a soft tile. Used where
+ * a card shows several numbers side by side, so they line up card to card.
+ */
+@Composable
+fun StatStrip(vararg stats: Pair<String, String>) {
+    Row(
+        Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).background(TaarPalette.Background)
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(Space.m),
+    ) {
+        for ((value, label) in stats) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(value, style = MaterialTheme.typography.titleSmall, color = TaarPalette.Text, maxLines = 1)
+                Text(label, style = MaterialTheme.typography.labelSmall, color = TaarPalette.Faint, maxLines = 1)
+            }
+        }
     }
 }
 
@@ -546,7 +596,7 @@ fun Card(
         modifier = modifier,
         shape = MaterialTheme.shapes.large,
         color = colors.containerColor,
-        border = BorderStroke(1.dp, TaarPalette.Outline),
+        shadowElevation = 1.dp,
     ) { Column(content = content) }
 }
 
@@ -563,7 +613,7 @@ fun Button(
     content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit,
 ) = androidx.compose.material3.Button(
     onClick = onClick, modifier = modifier, enabled = enabled,
-    shape = MaterialTheme.shapes.medium, colors = colors, content = content,
+    shape = CircleShape, colors = colors, content = content,
 )
 
 @Composable
@@ -574,8 +624,9 @@ fun OutlinedButton(
     content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit,
 ) = androidx.compose.material3.OutlinedButton(
     onClick = onClick, modifier = modifier, enabled = enabled,
-    shape = MaterialTheme.shapes.medium, border = BorderStroke(1.dp, TaarPalette.Outline),
-    colors = ButtonDefaults.outlinedButtonColors(contentColor = TaarPalette.Text), content = content,
+    shape = CircleShape, border = BorderStroke(1.dp, TaarPalette.Outline),
+    colors = ButtonDefaults.outlinedButtonColors(contentColor = TaarPalette.Text, containerColor = TaarPalette.Surface),
+    content = content,
 )
 
 /** The header of a collapsible card: title, one line of description, and an arrow. */

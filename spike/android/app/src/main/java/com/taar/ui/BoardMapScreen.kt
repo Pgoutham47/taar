@@ -254,7 +254,7 @@ fun BoardMapScreen(
             val onPhoto = circuits.filter { pins.isEmpty() || it.id in pins }
             val summary = BoardMap.summary(onPhoto.mapNotNull { dots[it.id] })
             if (summary.isNotEmpty()) Text(summary, style = MaterialTheme.typography.titleSmall)
-            Legend()
+            MarkLegend()
 
             TaarCard {
                 SectionLabel("Circuits")
@@ -387,10 +387,10 @@ private fun FullScreenPhoto(
                     pending?.let { (x, y) ->
                         Box(
                             Modifier.offset(fitW * x.toFloat() - DOT / 2, fitH * y.toFloat() - DOT / 2).then(keepSize)
-                                .size(DOT).clip(CircleShape).background(TaarPalette.Yellow)
+                                .size(DOT).clip(CircleShape).background(TaarPalette.Glow)
                                 .border(BorderStroke(2.dp, Color.White), CircleShape),
                             contentAlignment = Alignment.Center,
-                        ) { Text("+", fontWeight = FontWeight.Bold, color = Color(0xFF0B0E14)) }
+                        ) { Text("+", fontWeight = FontWeight.Bold, color = TaarPalette.Panel) }
                     }
                     for (c in circuits) {
                         val pin = pins[c.id] ?: continue
@@ -422,8 +422,8 @@ private fun FullScreenPhoto(
                 )
             }
             Text(
-                "Done", style = MaterialTheme.typography.labelLarge, color = Color(0xFF14110A),
-                modifier = Modifier.clip(CircleShape).background(TaarPalette.Yellow).clickable(onClick = onDone)
+                "Done", style = MaterialTheme.typography.labelLarge, color = TaarPalette.Panel,
+                modifier = Modifier.clip(CircleShape).background(TaarPalette.Glow).clickable(onClick = onDone)
                     .padding(horizontal = 20.dp, vertical = 10.dp),
             )
         }
@@ -441,7 +441,7 @@ private fun FullScreenPhoto(
                 moving != null -> Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Tap where ${moving.label}'s switch is", style = MaterialTheme.typography.bodyLarge,
                         color = Color.White, modifier = Modifier.weight(1f))
-                    TextButton(onClick = onCancel) { Text("Cancel", color = TaarPalette.Yellow) }
+                    TextButton(onClick = onCancel) { Text("Cancel", color = TaarPalette.Glow) }
                 }
                 chosen != null -> {
                     val dot = dots[chosen.id]
@@ -453,7 +453,7 @@ private fun FullScreenPhoto(
                         }
                     }
                     Row {
-                        TextButton(onClick = { onMove(chosen.id) }) { Text("Move", color = TaarPalette.Yellow) }
+                        TextButton(onClick = { onMove(chosen.id) }) { Text("Move", color = TaarPalette.Glow) }
                         TextButton(onClick = { onRemove(chosen.id) }) { Text("Remove", color = TaarPalette.Red) }
                         TextButton(onClick = onCancel) { Text("Close", color = TaarPalette.Grey) }
                     }
@@ -527,16 +527,16 @@ private val DOT = 30.dp
 
 private fun dotSize(selected: Boolean) = if (selected) DOT + 8.dp else DOT
 
-private fun colourOf(mark: BoardMap.Mark): Color = when (mark) {
+internal fun colourOf(mark: BoardMap.Mark): Color = when (mark) {
     BoardMap.Mark.PROBLEM -> TaarPalette.Red
     BoardMap.Mark.CHECK -> TaarPalette.Amber
     BoardMap.Mark.UNCLEAR -> TaarPalette.Blue
     BoardMap.Mark.LIVE -> TaarPalette.Green
     BoardMap.Mark.OFF -> TaarPalette.Grey
-    BoardMap.Mark.NOT_MEASURED -> TaarPalette.Background
+    BoardMap.Mark.NOT_MEASURED -> TaarPalette.Grey
 }
 
-private fun toneOf(mark: BoardMap.Mark?): Tone = when (mark) {
+internal fun toneOf(mark: BoardMap.Mark?): Tone = when (mark) {
     BoardMap.Mark.PROBLEM -> Tone.DANGER
     BoardMap.Mark.CHECK -> Tone.WARNING
     BoardMap.Mark.UNCLEAR -> Tone.INFO
@@ -565,13 +565,13 @@ private fun Dot(
     ) {
         Text(
             number.toString(), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge,
-            color = if (mark == BoardMap.Mark.NOT_MEASURED) Color.White else Color(0xFF0B0E14),
+            color = if (mark == BoardMap.Mark.NOT_MEASURED) Color.White else TaarPalette.Panel,
         )
     }
 }
 
 @Composable
-private fun Legend() {
+internal fun MarkLegend() {
     val marks = BoardMap.Mark.entries
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         for (row in marks.chunked(2)) {

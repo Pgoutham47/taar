@@ -22,6 +22,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.taar.domain.Circuit
@@ -278,18 +279,20 @@ fun HistoryScreen(
                         },
                     )
                 }
-                Text(
-                    "%.0f× noise · %.2f µT · sparking %.4f%s%s".format(
-                        LineState.contrastOf(r.lineConfidence),
-                        r.fieldAmplitudeUt,
-                        r.arcModulationIndex,
-                        if (r.fieldEstimateUsable) "" else " · field not usable",
-                        lr.label?.let { " · marked ${labelName(it)}" } ?: "",
-                    ),
-                    style = MaterialTheme.typography.labelSmall,
-                    fontFamily = FontFamily.Monospace,
-                    color = if (lr.label != null) labelColour(lr.label) else TaarPalette.Faint,
+                StatStrip(
+                    times(LineState.contrastOf(r.lineConfidence)) to "Signal vs noise",
+                    (if (r.fieldEstimateUsable) "%.1f µT".format(r.fieldAmplitudeUt) else "–") to "Field",
+                    "%.3f".format(r.arcModulationIndex) to "Sparking index",
                 )
+                val notes = listOfNotNull(
+                    if (r.fieldEstimateUsable) null else "Field estimate not usable",
+                    lr.label?.let { "Marked ${labelName(it)}" },
+                )
+                if (notes.isNotEmpty()) {
+                    Text(notes.joinToString(" · "), style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = if (lr.label != null) labelColour(lr.label) else TaarPalette.Grey)
+                }
             }
         }
     }

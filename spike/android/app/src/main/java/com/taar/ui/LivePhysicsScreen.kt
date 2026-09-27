@@ -188,10 +188,10 @@ private fun ToggleChip(label: String, on: Boolean, onClick: () -> Unit) {
     androidx.compose.material3.Surface(
         onClick = onClick,
         shape = CircleShape,
-        color = if (on) TaarPalette.Yellow.copy(alpha = 0.14f) else TaarPalette.Surface,
-        border = androidx.compose.foundation.BorderStroke(1.dp, if (on) TaarPalette.Yellow.copy(alpha = 0.6f) else TaarPalette.Outline),
+        color = if (on) TaarPalette.Ink else TaarPalette.Surface,
+        border = androidx.compose.foundation.BorderStroke(1.dp, if (on) TaarPalette.Ink else TaarPalette.Outline),
     ) {
-        Text(label, style = MaterialTheme.typography.labelLarge, color = if (on) TaarPalette.Yellow else TaarPalette.Grey,
+        Text(label, style = MaterialTheme.typography.labelLarge, color = if (on) TaarPalette.OnAccent else TaarPalette.Grey,
             maxLines = 1, modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp))
     }
 }
@@ -276,7 +276,7 @@ private fun FoldedPlot(v: CaptureCoordinator.LiveView, referenceUt: Double?) {
             val y = v.magFitAmplitudeUt * sin(2 * PI * x + v.magFitPhaseRad)
             if (k == 0) path.moveTo(0f, py(y)) else path.lineTo((x * w).toFloat(), py(y))
         }
-        drawPath(path, TaarPalette.Yellow, style = Stroke(width = 4f))
+        drawPath(path, TaarPalette.Glow, style = Stroke(width = 4f))
     }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         Text("0 ms", style = MaterialTheme.typography.labelSmall, color = TaarPalette.Grey)
@@ -299,7 +299,7 @@ private fun TracePlot(t: DoubleArray, y: DoubleArray) {
             val py = (h / 2 - (y[i] / span) * (h / 2)).toFloat()
             if (i == 0) path.moveTo(x, py) else path.lineTo(x, py)
         }
-        drawPath(path, TaarPalette.Yellow, style = Stroke(width = 2f))
+        drawPath(path, TaarPalette.Glow, style = Stroke(width = 2f))
     }
 }
 
@@ -479,16 +479,16 @@ private fun PipelinePanel(frame: TaarViewModel.LiveFrame, view: CaptureCoordinat
         steps.forEachIndexed { i, (name, value) ->
             val active = if (listening) i == 0 else i <= lit
             Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Box(Modifier.padding(top = 4.dp).size(10.dp).clip(CircleShape)
-                    .background(if (active) TaarPalette.Yellow else TaarPalette.Grey.copy(alpha = 0.35f)))
+                Box(Modifier.padding(top = 5.dp).size(10.dp).clip(CircleShape)
+                    .background(if (active) TaarPalette.Ink else TaarPalette.Outline))
                 Column {
                     Text(name, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold,
                         color = if (active) Color.Unspecified else TaarPalette.Grey)
-                    Text(value, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace,
+                    Text(value, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium,
                         color = TaarPalette.Grey)
                 }
             }
-            if (i < steps.lastIndex) Text("   ↓", color = TaarPalette.Grey, style = MaterialTheme.typography.labelSmall)
+            if (i < steps.lastIndex) Box(Modifier.padding(start = 4.dp).width(2.dp).height(12.dp).background(TaarPalette.Outline))
         }
     }
 }
@@ -535,12 +535,12 @@ private fun Readout(label: String, value: String, colour: Color = Color.Unspecif
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(label, style = MaterialTheme.typography.bodySmall, color = TaarPalette.Grey,
             modifier = Modifier.width(112.dp))
-        Text(value, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace, color = colour,
+        Text(value, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium, color = colour,
             textAlign = androidx.compose.ui.text.style.TextAlign.End, modifier = Modifier.weight(1f))
     }
 }
 
-private val PlotBg = Color(0xFF12161D)
+private val PlotBg = TaarPalette.Panel
 private val Grid = Color(0xFF2A313C)
 
 /** Display bands for the model's probability; fusion itself uses [ArcModel.THRESHOLD]. */

@@ -50,10 +50,12 @@ fun FusionCard(a: Fusion.Analysis, onWhy: () -> Unit) {
         Rule()
         SectionLabel("Taar analysis")
         for (row in a.summaryRows) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(row.name, style = MaterialTheme.typography.bodyMedium, color = TaarPalette.Grey)
-                Text(row.value, style = MaterialTheme.typography.bodyMedium, fontFamily = FontFamily.Monospace,
-                    color = colourOf(row).takeIf { it != Color.Unspecified } ?: TaarPalette.Text, textAlign = TextAlign.End)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(row.name, style = MaterialTheme.typography.bodyMedium, color = TaarPalette.Grey,
+                    modifier = Modifier.weight(1f))
+                Text(row.value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium,
+                    color = colourOf(row).takeIf { it != Color.Unspecified } ?: TaarPalette.Text, textAlign = TextAlign.End,
+                    modifier = Modifier.weight(1.3f, fill = false))
             }
         }
 
@@ -118,7 +120,7 @@ fun WhyStage(a: Fusion.Analysis, faults: List<RankedFault>, onBack: () -> Unit) 
                     Text(s.name, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
                     Text(tagOf(s.verdict), style = MaterialTheme.typography.labelMedium, color = colourOf(s))
                 }
-                Text(s.value, style = MaterialTheme.typography.bodyLarge, fontFamily = FontFamily.Monospace,
+                Text(s.value, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium,
                     color = colourOf(s))
                 Text(s.detail, style = MaterialTheme.typography.bodySmall, color = TaarPalette.Grey)
             }

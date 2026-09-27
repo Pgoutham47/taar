@@ -152,7 +152,7 @@ fun AskScreen(
                     enabled = !a.busy && draft.isNotBlank(),
                     modifier = Modifier.size(52.dp),
                     colors = IconButtonDefaults.filledIconButtonColors(
-                        containerColor = TaarPalette.Yellow, contentColor = Color(0xFF14110A),
+                        containerColor = TaarPalette.Ink, contentColor = TaarPalette.OnAccent,
                         disabledContainerColor = TaarPalette.SurfaceHigh, disabledContentColor = TaarPalette.Faint,
                     ),
                 ) { Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send") }

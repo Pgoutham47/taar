@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -253,7 +255,7 @@ private fun ScanWhy(r: CableScan.Result, onBack: () -> Unit) {
                     append(" · ${p.quality.name.lowercase()}")
                     p.rejectReason?.let { append(" · discarded: $it") }
                 },
-                style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace,
+                style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium,
                 color = TaarPalette.Grey,
             )
         }
@@ -268,20 +270,22 @@ private fun ScanWhy(r: CableScan.Result, onBack: () -> Unit) {
 
 @Composable
 private fun Row2(label: String, value: String) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(label, style = MaterialTheme.typography.bodyMedium)
-        Text(value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(label, style = MaterialTheme.typography.bodyMedium, color = TaarPalette.Grey, modifier = Modifier.weight(1f))
+        Text(value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold,
+            textAlign = androidx.compose.ui.text.style.TextAlign.End, modifier = Modifier.weight(1.3f, fill = false))
     }
 }
 
 @Composable
 private fun StrengthBar(label: String, value: Double, colour: Color) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(label, style = MaterialTheme.typography.bodySmall, modifier = Modifier.width(64.dp))
-        Box(Modifier.weight(1f).height(14.dp).background(TaarPalette.Grey.copy(alpha = 0.2f))) {
-            Box(Modifier.fillMaxWidth(value.coerceIn(0.02, 1.0).toFloat()).height(14.dp).background(colour))
+        Text(label, style = MaterialTheme.typography.bodySmall, color = TaarPalette.Grey, modifier = Modifier.width(64.dp))
+        Box(Modifier.weight(1f).height(10.dp).clip(CircleShape).background(TaarPalette.SurfaceHigh)) {
+            Box(Modifier.fillMaxWidth(value.coerceIn(0.02, 1.0).toFloat()).height(10.dp).clip(CircleShape).background(colour))
         }
-        Text("%.2f".format(value), style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
+        Text("%.2f".format(value), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium,
+            textAlign = androidx.compose.ui.text.style.TextAlign.End, modifier = Modifier.width(40.dp))
     }
 }
 

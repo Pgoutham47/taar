@@ -176,6 +176,8 @@ class TaarViewModel(
         /** The selected board's map: where each circuit's dot sits, and what it shows. */
         val boardMap: BoardMap.Map = BoardMap.Map(),
         val boardDots: Map<String, BoardMap.Dot> = emptyMap(),
+        /** Each circuit's newest reading, for the House View's amperes and pace. */
+        val latestReadings: Map<String, Reading> = emptyMap(),
         /** Rupees per unit, for the cost of a calibrated reading. One rate for the whole home. */
         val tariffRate: Double = EnergyCost.DEFAULT_RATE,
         /** How many hours a day the selected circuit's load runs, as the technician set it. */
@@ -284,7 +286,7 @@ class TaarViewModel(
         val latest = store.loadReadings(inst.id).map { it.reading }
             .groupBy { it.circuitId }.mapValues { (_, rs) -> rs.maxBy { it.epochMillis } }
         val dots = inst.circuits.associate { c -> c.id to BoardMap.dotOf(map.results[c.id], latest[c.id]) }
-        update { it.copy(boardMap = map, boardDots = dots) }
+        update { it.copy(boardMap = map, boardDots = dots, latestReadings = latest) }
     }
 
     /** Every circuit's latest result, for "which wires have a problem?". Same source as the map's dots. */

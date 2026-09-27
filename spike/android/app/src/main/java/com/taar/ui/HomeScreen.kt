@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Phone
@@ -153,6 +154,10 @@ fun HomeScreen(
             }
         }
 
+        TaarCard {
+            ListRow("House View", "Your circuits as the rooms of a house, lit by the current in each",
+                icon = Icons.Filled.Home, iconTint = TaarPalette.Yellow, onClick = { onGo(MainActivity.Screen.HOUSE) })
+        }
         if (state.boardMapEnabled) {
             TaarCard {
                 ListRow("Board Map", "See every circuit on a photo of the board",
@@ -183,6 +188,9 @@ fun ToolsScreen(
     TaarScreen(title = "Tools", subtitle = "Deeper checks and setup", bottomInset = false) {
         SectionLabel("Inspect")
         TaarCard {
+            ListRow("House View", "Every circuit as a room, glowing with its last measured current",
+                icon = Icons.Filled.Home, iconTint = TaarPalette.Yellow, onClick = { onGo(MainActivity.Screen.HOUSE) })
+            Rule()
             if (boardMapEnabled) {
                 ListRow("Board Map", "A photo of the board with every circuit's latest result on it",
                     icon = Icons.Filled.Place, iconTint = TaarPalette.Green, onClick = { onGo(MainActivity.Screen.BOARD_MAP) })
@@ -248,7 +256,7 @@ private fun ModeSwitch(
             Switch(
                 checked = on, onCheckedChange = onChange,
                 colors = SwitchDefaults.colors(
-                    checkedThumbColor = TaarPalette.Background, checkedTrackColor = TaarPalette.Yellow,
+                    checkedThumbColor = TaarPalette.OnAccent, checkedTrackColor = TaarPalette.Ink,
                     uncheckedThumbColor = TaarPalette.Grey, uncheckedTrackColor = TaarPalette.SurfaceHigh,
                     uncheckedBorderColor = TaarPalette.Outline,
                 ),
