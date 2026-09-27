@@ -11,10 +11,6 @@ wire, and it never touches the internet.**
 Built for **iQOO City Battles 2026, Hyderabad** (26–27 September), Track 05: Smart Living.
 *Taar* (తార) means "wire" in Telugu.
 
-> **Status.** The event rules require code written inside the event window. Per
-> [`HACKATHON.md`](HACKATHON.md) §1, work in this repository is kept as reference
-> material under that protocol. Read §1 before reusing anything here.
-
 ---
 
 ## At a glance
