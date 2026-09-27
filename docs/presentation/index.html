@@ -1,0 +1,1199 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Taar — Your phone can see electricity</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #070b18;
+    --bg-2: #0d1430;
+    --panel: rgba(255,255,255,.06);
+    --line: rgba(255,255,255,.14);
+    --text: #f4f7ff;
+    --muted: #a5b1d6;
+
+    --yellow: #ffd60a;
+    --cyan: #19e6ff;
+    --magenta: #ff4d8d;
+    --lime: #4dff9a;
+    --orange: #ff8a1f;
+    --violet: #9b7dff;
+
+    --display: "Space Grotesk", "Avenir Next", "Helvetica Neue", Arial, sans-serif;
+    --sans: "Inter", "Helvetica Neue", Arial, sans-serif;
+    --mono: "JetBrains Mono", Menlo, "SF Mono", monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg); color: var(--text); font-family: var(--sans);
+    overflow: hidden; -webkit-font-smoothing: antialiased;
+  }
+
+  /* ---------- deck ---------- */
+  .deck { position: fixed; inset: 0; }
+  .slide {
+    position: absolute; inset: 0; padding: 56px 84px 76px; display: none;
+    flex-direction: column; overflow: hidden;
+  }
+  .slide.active { display: flex; animation: enter .45s cubic-bezier(.2,.8,.2,1) both; }
+  @keyframes enter { from { opacity: 0; transform: translateY(18px) scale(.985); } to { opacity: 1; transform: none; } }
+
+  .bgglow::before {
+    content: ""; position: absolute; width: 1200px; height: 1200px; border-radius: 50%;
+    right: -420px; top: -520px; pointer-events: none; z-index: 0;
+    background: radial-gradient(circle, rgba(255,214,10,.22) 0%, rgba(25,230,255,.12) 35%, rgba(7,11,24,0) 70%);
+  }
+  .bgglow-l::before { right: auto; left: -480px; top: auto; bottom: -560px;
+    background: radial-gradient(circle, rgba(255,77,141,.22) 0%, rgba(155,125,255,.12) 35%, rgba(7,11,24,0) 70%); }
+  .bgglow-c::before { right: auto; left: 50%; top: 50%; transform: translate(-50%,-50%);
+    background: radial-gradient(circle, rgba(77,255,154,.16) 0%, rgba(25,230,255,.10) 35%, rgba(7,11,24,0) 70%); }
+  .slide > * { position: relative; z-index: 1; }
+
+  .yellow { background: var(--yellow); color: #14110a; }
+  .yellow .eyebrow { color: #7a5a00; }
+  .yellow .muted { color: #4a3f10; }
+  .cyan { background: var(--cyan); color: #04202a; }
+  .cyan .eyebrow { color: #045668; }
+  .cyan .muted { color: #0a4a58; }
+  .magenta { background: var(--magenta); color: #2a0412; }
+  .magenta .eyebrow { color: #7a0a34; }
+  .magenta .muted { color: #5a0a2a; }
+
+  .eyebrow { font: 700 12px/1 var(--sans); letter-spacing: .26em; text-transform: uppercase; color: var(--yellow); margin-bottom: 20px; }
+  h1 { font: 700 clamp(64px, 9vw, 150px)/.92 var(--display); letter-spacing: -.035em; }
+  h2 { font: 700 clamp(38px, 4.6vw, 66px)/1.02 var(--display); letter-spacing: -.028em; max-width: 1100px; }
+  h3 { font: 700 22px/1.2 var(--display); letter-spacing: -.01em; }
+  p  { font: 400 19px/1.55 var(--sans); color: var(--muted); }
+  .yellow p, .cyan p, .magenta p { color: inherit; opacity: .82; }
+  .lede { font: 500 clamp(22px, 2.2vw, 30px)/1.35 var(--display); color: var(--text); letter-spacing: -.012em; max-width: 1000px; }
+  .yellow .lede, .cyan .lede, .magenta .lede { color: inherit; }
+  strong { color: var(--text); font-weight: 600; }
+  .yellow strong, .cyan strong, .magenta strong { color: inherit; }
+  .mono { font-family: var(--mono); }
+  .muted { color: var(--muted); }
+  .hl-y { color: var(--yellow); } .hl-c { color: var(--cyan); } .hl-m { color: var(--magenta); }
+  .hl-l { color: var(--lime); } .hl-o { color: var(--orange); } .hl-v { color: var(--violet); }
+
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: start; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; }
+  .grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; }
+  .row { display: flex; gap: 18px; align-items: center; }
+  .fill { flex: 1; min-height: 0; }
+  .mt { margin-top: 26px; } .mt2 { margin-top: 44px; }
+
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 22px 24px;
+    backdrop-filter: blur(6px);
+  }
+  .card.accent-y { border-color: rgba(255,214,10,.5); box-shadow: 0 0 0 1px rgba(255,214,10,.15), 0 20px 60px -30px rgba(255,214,10,.4); }
+  .card.accent-c { border-color: rgba(25,230,255,.5); box-shadow: 0 0 0 1px rgba(25,230,255,.15), 0 20px 60px -30px rgba(25,230,255,.4); }
+  .card.accent-m { border-color: rgba(255,77,141,.5); box-shadow: 0 0 0 1px rgba(255,77,141,.15), 0 20px 60px -30px rgba(255,77,141,.4); }
+  .card.accent-l { border-color: rgba(77,255,154,.5); box-shadow: 0 0 0 1px rgba(77,255,154,.15), 0 20px 60px -30px rgba(77,255,154,.4); }
+  .card.accent-v { border-color: rgba(155,125,255,.5); box-shadow: 0 0 0 1px rgba(155,125,255,.15), 0 20px 60px -30px rgba(155,125,255,.4); }
+  .card h3 { margin-bottom: 8px; }
+  .card p { font-size: 16.5px; line-height: 1.5; }
+  .yellow .card, .cyan .card, .magenta .card { background: rgba(0,0,0,.10); border-color: rgba(0,0,0,.18); }
+
+  .tag { display: inline-block; font: 700 11.5px/1 var(--sans); letter-spacing: .14em; text-transform: uppercase;
+         padding: 7px 11px; border-radius: 999px; border: 1px solid currentColor; }
+
+  .big { font: 700 clamp(56px, 7vw, 108px)/1 var(--display); letter-spacing: -.04em; }
+  .num { font: 700 46px/1 var(--display); letter-spacing: -.03em; }
+  .kv { display: grid; grid-template-columns: 1fr auto; gap: 14px 22px; padding: 12px 0; border-top: 1px solid var(--line); align-items: baseline; }
+  .kv:first-child { border-top: 0; }
+  .kv dt { color: var(--muted); font-size: 16px; }
+  .kv dd { font-family: var(--mono); font-size: 16px; text-align: right; }
+
+  code, pre { font-family: var(--mono); }
+  pre { background: #030611; border: 1px solid var(--line); border-radius: 14px; padding: 18px 22px; font-size: 14.5px; line-height: 1.6; color: #dbe4ff; overflow: hidden; }
+  pre .c { color: #6b7aa8; } pre .k { color: var(--cyan); } pre .s { color: var(--lime); } pre .y { color: var(--yellow); } pre .m { color: var(--magenta); }
+
+  canvas { display: block; width: 100%; height: 100%; }
+  .canvasbox { position: relative; border-radius: 18px; overflow: hidden; background: #030611; border: 1px solid var(--line); }
+  .readout { position: absolute; left: 16px; top: 14px; font: 500 13px/1.5 var(--mono); color: var(--muted); }
+  .readout b { color: var(--text); font-weight: 600; }
+
+  /* controls */
+  .ctl { display: grid; gap: 14px; }
+  .ctl label { display: grid; grid-template-columns: 150px 1fr 96px; align-items: center; gap: 14px; font-size: 15px; color: var(--muted); }
+  .ctl label output { font-family: var(--mono); color: var(--text); text-align: right; }
+  input[type=range] { -webkit-appearance: none; height: 6px; border-radius: 3px; background: rgba(255,255,255,.16); outline: none; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; border-radius: 50%; background: var(--yellow); border: 3px solid #070b18; box-shadow: 0 0 0 2px var(--yellow); cursor: pointer; }
+  .btn { font: 700 15px/1 var(--sans); padding: 14px 22px; border-radius: 999px; border: 0; cursor: pointer; background: var(--yellow); color: #14110a; letter-spacing: .01em; transition: transform .15s, box-shadow .15s; }
+  .btn:hover { transform: translateY(-1px); box-shadow: 0 10px 30px -10px rgba(255,214,10,.8); }
+  .btn.ghost { background: transparent; color: var(--text); border: 1.5px solid var(--line); }
+  .btn.ghost.on { border-color: var(--yellow); color: var(--yellow); }
+  .btn.cy { background: var(--cyan); color: #04202a; }
+  .btn.mg { background: var(--magenta); color: #fff; }
+  .btn.lm { background: var(--lime); color: #04200f; }
+  .btn.sm { padding: 10px 16px; font-size: 13px; }
+
+  /* steps */
+  .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  .step { border-radius: 18px; padding: 20px; background: var(--panel); border: 1px solid var(--line); cursor: pointer; transition: transform .2s, border-color .2s, background .2s; }
+  .step:hover { transform: translateY(-3px); }
+  .step.on { background: rgba(255,214,10,.12); border-color: var(--yellow); }
+  .step .n { font: 700 13px/1 var(--mono); color: var(--yellow); letter-spacing: .1em; }
+  .step h3 { margin: 10px 0 6px; font-size: 20px; }
+
+  /* phone mock */
+  .phone { width: 300px; height: 620px; border-radius: 38px; background: #0b0f1e; border: 8px solid #1b2340; box-shadow: 0 40px 80px -30px rgba(0,0,0,.9), 0 0 0 1px rgba(255,255,255,.08); overflow: hidden; position: relative; flex-shrink: 0; }
+  .phone .screen { position: absolute; inset: 0; padding: 26px 18px; display: flex; flex-direction: column; gap: 12px; font-size: 13px; }
+  .phone .title { font: 700 20px/1 var(--display); }
+  .phone .pill { display: inline-block; font: 700 9.5px/1 var(--sans); letter-spacing: .12em; text-transform: uppercase; padding: 5px 8px; border-radius: 999px; margin-right: 4px; }
+  .phone .pcard { background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.12); border-radius: 14px; padding: 12px; }
+  .phone .pcard small { color: var(--muted); font-size: 11.5px; }
+  .phone .pbtn { margin-top: auto; background: var(--yellow); color: #14110a; text-align: center; font-weight: 700; padding: 14px; border-radius: 999px; }
+  .phone .bar { height: 6px; border-radius: 3px; background: rgba(255,255,255,.12); overflow: hidden; }
+  .phone .bar i { display: block; height: 100%; background: var(--yellow); }
+  .phone .status { border-radius: 14px; padding: 14px; font-weight: 700; font-size: 15px; line-height: 1.25; }
+
+  /* features */
+  .features { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  .feat { border-radius: 16px; padding: 16px 16px 14px; background: var(--panel); border: 1px solid var(--line); cursor: pointer; transition: transform .18s, border-color .18s; min-height: 118px; }
+  .feat:hover { transform: translateY(-3px); border-color: rgba(255,255,255,.35); }
+  .feat.on { border-color: var(--yellow); background: rgba(255,214,10,.10); }
+  .feat .ic { font-size: 22px; line-height: 1; margin-bottom: 10px; }
+  .feat h4 { font: 700 16px/1.2 var(--display); margin-bottom: 4px; }
+  .feat small { color: var(--muted); font-size: 12.5px; line-height: 1.35; display: block; }
+  .featdetail { border-radius: 18px; padding: 22px 26px; border: 1px solid rgba(255,214,10,.5); background: rgba(255,214,10,.08); min-height: 120px; }
+  .featdetail h3 { color: var(--yellow); margin-bottom: 6px; }
+
+  /* timeline */
+  .timeline { position: relative; display: grid; grid-template-columns: repeat(8, 1fr); gap: 10px; margin-top: 30px; }
+  .timeline::before { content: ""; position: absolute; left: 0; right: 0; top: 13px; height: 3px; background: linear-gradient(90deg, var(--cyan), var(--yellow), var(--magenta), var(--lime)); border-radius: 2px; }
+  .tl { padding-top: 34px; position: relative; cursor: pointer; }
+  .tl::before { content: ""; position: absolute; left: 0; top: 4px; width: 22px; height: 22px; border-radius: 50%; background: var(--bg); border: 4px solid var(--yellow); transition: transform .2s; }
+  .tl.on::before { transform: scale(1.35); background: var(--yellow); }
+  .tl b { display: block; font: 700 15px/1.2 var(--display); }
+  .tl small { color: var(--muted); font-size: 12.5px; line-height: 1.35; display: block; margin-top: 4px; }
+
+  /* table */
+  table { border-collapse: collapse; width: 100%; font-size: 16px; }
+  th, td { padding: 11px 14px; text-align: left; border-bottom: 1px solid var(--line); }
+  th { font: 700 12px/1 var(--sans); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+  td.mono { font-family: var(--mono); }
+  .yellow table th, .yellow table td { border-color: rgba(0,0,0,.18); } .yellow th { color: #6a5300; }
+
+  /* layers */
+  .layers { display: grid; gap: 10px; }
+  .layer { display: grid; grid-template-columns: 170px 1fr; gap: 16px; align-items: center; padding: 14px 18px; border-radius: 14px; border: 1px solid var(--line); background: var(--panel); }
+  .layer b { font: 700 15px/1.1 var(--display); }
+  .layer span { font-size: 15px; color: var(--muted); }
+  .layer span code { color: var(--text); font-size: 13.5px; }
+
+  #stack .layer { padding: 10px 16px; } #stack .layer span { font-size: 13.5px; } #stack .layer span code { font-size: 12.5px; }
+  #stack th, #stack td { padding: 8px 12px; font-size: 14.5px; } #stack .card p { font-size: 15px; } #stack .grid2 { margin-top: 24px; }
+
+  #scope .check { font-size: 20px; padding: 14px 0; } #scope .grid2 { margin-top: 36px; }
+
+  .ico { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; display: inline-block; vertical-align: -0.12em; }
+  .ico-lg { width: 44px; height: 44px; stroke-width: 1.75; display: block; }
+  .ico-md { width: 36px; height: 36px; stroke-width: 1.75; flex-shrink: 0; }
+  .feat .ic { margin-bottom: 10px; line-height: 0; } .feat .ic .ico { width: 24px; height: 24px; color: var(--yellow); stroke-width: 1.9; }
+
+  #current p { font-size: 17px; } #current .mt2 { margin-top: 20px; } #current .kv { padding: 9px 0; } #current h2 { font-size: clamp(32px,3.2vw,46px); }
+
+  /* pipeline */
+  .pipe { display: flex; align-items: stretch; gap: 0; margin-top: 26px; }
+  .pipe .node { flex: 1; border-radius: 16px; padding: 18px 16px; background: var(--panel); border: 1px solid var(--line); position: relative; }
+  .pipe .node + .node { margin-left: 34px; }
+  .pipe .node + .node::before { content: "→"; position: absolute; left: -30px; top: 50%; transform: translateY(-50%); font-size: 26px; color: var(--yellow); }
+  .pipe .node b { display: block; font: 700 16px/1.2 var(--display); margin-bottom: 6px; }
+  .pipe .node small { color: var(--muted); font-size: 13.5px; line-height: 1.4; display: block; }
+  .pipe .node .t { position: absolute; right: 12px; top: 10px; font: 700 10px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; }
+
+  /* chrome */
+  .chrome { position: fixed; left: 0; right: 0; bottom: 0; height: 56px; display: flex; align-items: center; padding: 0 28px; gap: 18px; z-index: 50;
+    background: linear-gradient(180deg, rgba(7,11,24,0), rgba(7,11,24,.85)); pointer-events: none; }
+  .chrome > * { pointer-events: auto; }
+  .progress { flex: 1; height: 4px; border-radius: 2px; background: rgba(255,255,255,.14); overflow: hidden; }
+  .progress i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--cyan), var(--yellow)); transition: width .35s; }
+  .counter { font: 600 13px/1 var(--mono); color: var(--muted); min-width: 64px; text-align: right; }
+  .navbtn { width: 36px; height: 36px; border-radius: 50%; border: 1.5px solid var(--line); background: rgba(7,11,24,.6); color: var(--text); cursor: pointer; font-size: 16px; }
+  .navbtn:hover { border-color: var(--yellow); color: var(--yellow); }
+  .section { font: 700 11px/1 var(--sans); letter-spacing: .22em; text-transform: uppercase; color: var(--muted); }
+  .menubtn { font: 700 12px/1 var(--sans); letter-spacing: .14em; text-transform: uppercase; padding: 10px 14px; border-radius: 999px; border: 1.5px solid var(--line); background: rgba(7,11,24,.6); color: var(--text); cursor: pointer; }
+  .menu { position: fixed; inset: 0; background: rgba(4,7,16,.94); z-index: 60; display: none; padding: 60px 84px; overflow: auto; }
+  .menu.open { display: block; }
+  .menu h2 { margin-bottom: 26px; }
+  .menu ol { columns: 3; column-gap: 40px; list-style: none; }
+  .menu li { break-inside: avoid; padding: 10px 14px; border-radius: 10px; cursor: pointer; font-size: 17px; display: flex; gap: 14px; }
+  .menu li:hover { background: rgba(255,255,255,.07); }
+  .menu li span { font-family: var(--mono); color: var(--yellow); font-size: 13px; padding-top: 3px; min-width: 26px; }
+  .hint { position: fixed; right: 28px; top: 22px; font: 500 12px/1 var(--mono); color: var(--muted); opacity: .7; z-index: 50; }
+
+  /* misc */
+  .split { display: grid; grid-template-columns: 1.1fr 1fr; gap: 56px; align-items: center; flex: 1; min-height: 0; }
+  .check { display: flex; gap: 12px; align-items: flex-start; font-size: 17.5px; color: var(--text); line-height: 1.45; padding: 10px 0; border-top: 1px solid var(--line); }
+  .check:first-child { border-top: 0; }
+  .check i { flex-shrink: 0; width: 24px; height: 24px; border-radius: 50%; display: inline-grid; place-items: center; font-style: normal; font-size: 13px; font-weight: 800; margin-top: 1px; }
+  .ok i { background: var(--lime); color: #04200f; } .no i { background: var(--magenta); color: #fff; }
+  .yellow .check { border-color: rgba(0,0,0,.18); color: inherit; }
+
+  .who { border-radius: 24px; padding: 30px; min-height: 100%; display: flex; flex-direction: column; gap: 14px; }
+  .who h3 { font-size: 30px; }
+  .who ul { list-style: none; display: grid; gap: 10px; }
+  .who li { padding-left: 22px; position: relative; font-size: 17px; line-height: 1.45; }
+  .who li::before { content: "▸"; position: absolute; left: 0; }
+
+  .footer-note { position: absolute; left: 84px; right: 84px; bottom: 26px; font-size: 12.5px; color: var(--muted); opacity: .8; z-index: 2; }
+  .yellow .footer-note, .cyan .footer-note, .magenta .footer-note { color: inherit; }
+
+  @media (max-width: 1100px) {
+    .slide { padding: 36px 32px 76px; }
+    .grid2, .split { grid-template-columns: 1fr; gap: 24px; }
+    .grid3, .grid4, .features, .steps { grid-template-columns: repeat(2, 1fr); }
+    .timeline { grid-template-columns: repeat(4, 1fr); }
+    .pipe { flex-direction: column; } .pipe .node + .node { margin: 30px 0 0; } .pipe .node + .node::before { left: 50%; top: -30px; transform: translateX(-50%) rotate(90deg); }
+    .phone { display: none; }
+    .menu ol { columns: 1; }
+  }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-flame" viewBox="0 0 24 24"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></symbol>
+    <symbol id="i-zap" viewBox="0 0 24 24"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></symbol>
+    <symbol id="i-compass" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88"/></symbol>
+    <symbol id="i-mic" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></symbol>
+    <symbol id="i-activity" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></symbol>
+    <symbol id="i-trend" viewBox="0 0 24 24"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></symbol>
+    <symbol id="i-plug" viewBox="0 0 24 24"><path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a6 6 0 0 1-12 0V8Z"/></symbol>
+    <symbol id="i-rupee" viewBox="0 0 24 24"><path d="M6 3h12"/><path d="M6 8h12"/><path d="m6 13 8.5 8"/><path d="M6 13h3"/><path d="M9 13c6.667 0 6.667-10 0-10"/></symbol>
+    <symbol id="i-radio" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2"/><path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"/><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"/><path d="M19.1 4.9C23 8.8 23 15.1 19.1 19"/></symbol>
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></symbol>
+    <symbol id="i-camera" viewBox="0 0 24 24"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></symbol>
+    <symbol id="i-volume" viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></symbol>
+    <symbol id="i-chat" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-tag" viewBox="0 0 24 24"><path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z"/><path d="M7 7h.01"/></symbol>
+    <symbol id="i-rotate" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></symbol>
+    <symbol id="i-wifioff" viewBox="0 0 24 24"><path d="M12 20h.01"/><path d="M8.5 16.429a5 5 0 0 1 7 0"/><path d="M5 12.859a10 10 0 0 1 5.17-2.69"/><path d="M19 12.859a10 10 0 0 0-2.007-1.523"/><path d="M2 8.82a15 15 0 0 1 4.177-2.643"/><path d="M22 8.82a15 15 0 0 0-11.288-3.764"/><line x1="2" y1="2" x2="22" y2="22"/></symbol>
+  </defs>
+</svg>
+<div class="hint">← → to move · M for menu · F for fullscreen</div>
+
+<div class="deck" id="deck">
+
+<!-- ═══════════════ 1 · COVER ═══════════════ -->
+<section class="slide bgglow" data-section="Taar">
+  <div class="row" style="justify-content:space-between">
+    <span class="eyebrow" style="margin:0">iQOO City Battles 2026 · Hyderabad · Track 05 · Smart Living</span>
+    <span class="tag hl-c">100% on-device · no internet</span>
+  </div>
+  <div class="fill" style="display:grid; grid-template-columns: 1.05fr 1fr; align-items:center; gap:40px">
+    <div>
+      <h1>Taar<span class="hl-y">.</span></h1>
+      <div class="lede mt" style="font-size:clamp(26px,2.8vw,40px)">Your phone can <span class="hl-y">see electricity</span>.</div>
+      <p class="mt" style="max-width:640px; font-size:20px">Hold it near a wire for three seconds. It tells you whether current is flowing, how much, and whether anything is sparking. It never touches the wire, and it never touches the internet.</p>
+      <div class="row mt2" style="gap:12px; flex-wrap:wrap">
+        <span class="tag hl-y">Magnetometer → current</span>
+        <span class="tag hl-m">Microphone → sparking</span>
+        <span class="tag hl-l">3 AI models on the phone</span>
+      </div>
+    </div>
+    <div class="canvasbox" style="height:520px"><canvas id="cv-cover"></canvas>
+      <div class="readout">live wire · magnetic field at 50 Hz<br><b>every ring is a reading, not an animation of an idea</b></div>
+    </div>
+  </div>
+  <div class="footer-note">తార · “wire” in Telugu. Press → to begin.</div>
+</section>
+
+<!-- ═══════════════ 2 · THE PROBLEM ═══════════════ -->
+<section class="slide magenta" data-section="Problem">
+  <div class="eyebrow">01 · The problem</div>
+  <h2>Electrical faults start fires. The faults that start them are invisible.</h2>
+  <div class="grid3 mt2">
+    <div class="card">
+      <svg class="ico ico-lg"><use href="#i-flame"/></svg>
+      <h3 class="mt" style="margin-top:14px">A loose connection, quietly arcing</h3>
+      <p>Behind a switchboard cover, a terminal that was tightened ten years ago sparks a hundred times a second. Nobody hears it. It heats, chars and one day ignites.</p>
+    </div>
+    <div class="card">
+      <svg class="ico ico-lg"><use href="#i-zap"/></svg>
+      <h3 class="mt" style="margin-top:14px">A circuit run over its rating</h3>
+      <p>An AC and a geyser were added to a wire sized for lights. The breaker holds, the insulation slowly cooks. The bill goes up and nobody knows why.</p>
+    </div>
+    <div class="card">
+      <svg class="ico ico-lg"><use href="#i-alert"/></svg>
+      <h3 class="mt" style="margin-top:14px">A breaker labelled “off” that is live</h3>
+      <p>Before touching a wire, an electrician needs to know it is dead. The usual method is a label on a board that may be a decade out of date, or a probe.</p>
+    </div>
+  </div>
+  <div class="grid2 mt2" style="align-items:center">
+    <div class="lede">The instruments that would catch this — a clamp meter, a thermal camera, an arc-fault analyser — cost more than a small electrician earns in a month.</div>
+    <p style="font-size:19px">So the tools stay with large contractors, and the homes and small shops that most need checking never get checked. A family has no way at all to ask “is something wrong inside my wall?”</p>
+  </div>
+</section>
+
+<!-- ═══════════════ 3 · WHO IT IS FOR ═══════════════ -->
+<section class="slide bgglow-l" data-section="Problem">
+  <div class="eyebrow">02 · Who it is for</div>
+  <h2>Two people hold the same phone.</h2>
+  <div class="grid2 mt2" style="gap:28px">
+    <div class="who card accent-y">
+      <span class="tag hl-y">The electrician</span>
+      <h3>Triage before opening a live panel</h3>
+      <ul>
+        <li><strong>Confirm the switched-off circuit</strong> is actually carrying no current before touching it.</li>
+        <li><strong>Find which breaker feeds which wire</strong> with Geiger mode, no label needed.</li>
+        <li><strong>Spot a sparking joint</strong> along a cable run and narrow down where to open.</li>
+        <li><strong>Record every circuit's normal</strong> on a board once, and compare on every later visit.</li>
+        <li><strong>Hear the result spoken</strong>, because the phone is pressed to a wall facing away.</li>
+      </ul>
+    </div>
+    <div class="who card accent-c">
+      <span class="tag hl-c">Anyone, at home</span>
+      <h3>Test your own house tonight</h3>
+      <ul>
+        <li><strong>Is this wire live?</strong> Hold the phone on it. No setup: Geiger mode clicks faster near current.</li>
+        <li><strong>What is this appliance costing me?</strong> Calibrate once with a kettle, then see amps and rupees a month.</li>
+        <li><strong>Is something sparking behind the switchboard?</strong> Measure the cable and listen for the 100 Hz pattern.</li>
+        <li><strong>Which room is drawing power right now?</strong> House View lights each room by the current in its circuit.</li>
+        <li><strong>Ask in plain English</strong>: “why did it say that?” answered by an AI that runs on the phone.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="footer-note">Both are told the same thing on every screen: Taar is a triage aid, not a certificate. It senses current, not voltage.</div>
+</section>
+
+<!-- ═══════════════ 4 · THE INSIGHT ═══════════════ -->
+<section class="slide yellow" data-section="Insight">
+  <div class="eyebrow">03 · The insight</div>
+  <h2 style="max-width:1200px">Every live wire broadcasts its current as a magnetic field.<br>Every sparking joint broadcasts its fault as sound.</h2>
+  <div class="lede mt2">A phone already carries both instruments.</div>
+  <div class="grid2 mt2" style="gap:28px">
+    <div class="card">
+      <div class="row"><svg class="ico ico-md"><use href="#i-compass"/></svg><h3 style="font-size:26px">The compass sensor is a current sensor</h3></div>
+      <p class="mt" style="margin-top:12px; font-size:18px">The magnetometer that points Google Maps north also feels the 50 Hz wobble of a mains wire. The principle a ₹5,000 clamp meter uses, without the clamp.</p>
+    </div>
+    <div class="card">
+      <div class="row"><svg class="ico ico-md"><use href="#i-mic"/></svg><h3 style="font-size:26px">The microphone is an arc detector</h3></div>
+      <p class="mt" style="margin-top:12px; font-size:18px">A series arc re-ignites twice per mains cycle. Its hiss pulses at exactly 100 Hz. Nothing else in a room is locked to the grid like that.</p>
+    </div>
+  </div>
+  <div class="row mt2" style="gap:14px; flex-wrap:wrap">
+    <span class="tag">No probe</span><span class="tag">No contact</span><span class="tag">No network</span><span class="tag">No extra hardware</span><span class="tag">3 seconds</span>
+  </div>
+</section>
+
+<!-- ═══════════════ 6 · PHYSICS II · 50 Hz contrast ═══════════════ -->
+<section class="slide" id="current" data-section="Physics">
+  <div class="eyebrow">04 · Physics I · Current · measure the 50 Hz in the field, not the field</div>
+  <div class="split" style="grid-template-columns: 1fr 1.15fr">
+    <div>
+      <h2 style="font-size:clamp(34px,3.6vw,52px)">Only one thing in the room wobbles at exactly 50 Hz.</h2>
+      <p class="mt">A wire carrying current makes a magnetic field, <span class="mono hl-y">B = μ₀I / 2πr</span>. A 5 A kettle at 3 cm gives about 33 µT, comparable to Earth's own 45 µT and far above the 0.4 µT sensor floor we measured. Strength was never the problem.</p>
+      <p class="mt">Telling it apart is. Earth's field is static, a hand drifts several µT and trembles at about 10 Hz, chargers and metal all move the needle. So Taar fits a 50 Hz sine to each axis and compares its power with the neighbouring bands, 30–48 and 52–70 Hz. That ratio is the <strong>contrast</strong>: room noise reads 1–3×, a kettle cord 28–62×.</p>
+      <div class="row mt2" style="gap:12px">
+        <button class="btn ghost on" id="p2-off">Kettle OFF</button>
+        <button class="btn" id="p2-on">Kettle ON · 5.2 A</button>
+      </div>
+      <dl class="mt2">
+        <div class="kv"><dt>Under 8×</dt><dd class="hl-c">no current</dd></div>
+        <div class="kv"><dt>8× to 13.5×</dt><dd class="hl-o">unclear, measure again</dd></div>
+        <div class="kv"><dt>Over 13.5×</dt><dd class="hl-y">current flowing</dd></div>
+      </dl>
+    </div>
+    <div style="display:grid; grid-template-rows: 1fr 1fr; gap:14px; height:560px">
+      <div class="canvasbox"><canvas id="cv-mag"></canvas><div class="readout">magnetometer, one axis, 3 s · <b id="p2-state">no current</b></div></div>
+      <div class="canvasbox"><canvas id="cv-spec"></canvas><div class="readout">spectrum 20–80 Hz · contrast <b id="p2-contrast">2×</b></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════ 7 · PHYSICS III · sampling trap ═══════════════ -->
+<section class="slide" data-section="Physics">
+  <div class="eyebrow">05 · Physics II · The sampling trap that would have killed the project</div>
+  <div class="split" style="grid-template-columns: 1fr 1.15fr">
+    <div>
+      <h2 style="font-size:clamp(34px,3.6vw,52px)">Android's default sensor rate is 100 Hz. It cannot see 50 Hz.</h2>
+      <p class="mt">Everyone assumes the danger is a slow sensor. It is not. What matters is how many <strong>distinct phases</strong> of the 50 Hz wave the samples land on:</p>
+      <pre class="mt" style="font-size:17px"><span class="k">phases</span> = fs / gcd(fs, 50)      <span class="c">// need ≥ 3 to fit sin + cos</span></pre>
+      <div class="ctl mt2">
+        <label>Sample rate <input type="range" id="p3-fs" min="20" max="150" step="1" value="100"><output id="p3-fso">100 Hz</output></label>
+      </div>
+      <div class="grid3 mt" style="gap:12px">
+        <div class="card"><div class="eyebrow" style="margin-bottom:8px;color:var(--muted)">Distinct phases</div><div class="num" id="p3-ph">2</div></div>
+        <div class="card"><div class="eyebrow" style="margin-bottom:8px;color:var(--muted)">Verdict</div><div class="num" id="p3-v" style="font-size:30px">marginal</div></div>
+        <div class="card"><div class="eyebrow" style="margin-bottom:8px;color:var(--muted)">Amplitude error</div><div class="num" id="p3-err" style="font-size:30px">22%</div></div>
+      </div>
+      <p class="mt" style="font-size:15px">At 50 Hz every sample lands on the same phase and the wave reads as a constant. 24 Hz recovers it to 0.3%. Locked rates below 150 Hz: <span class="mono hl-m">10, 20, 25, 50, 100</span>. The fix is one call at sensor registration: <span class="mono hl-l">safeRate()</span> moves 100 → 99. The iQOO delivered <strong>105.3 Hz over 21 phases</strong>.</p>
+    </div>
+    <div class="canvasbox" style="height:560px"><canvas id="cv-sample"></canvas><div class="readout">50 Hz wave · dots are the samples · <b id="p3-note">try 50, 100, 99, 24</b></div></div>
+  </div>
+</section>
+
+<!-- ═══════════════ 8 · PHYSICS IV · arcs ═══════════════ -->
+<section class="slide" data-section="Physics">
+  <div class="eyebrow">06 · Physics III · Sparking · an arc has a heartbeat</div>
+  <div class="split" style="grid-template-columns: 1fr 1.15fr">
+    <div>
+      <h2 style="font-size:clamp(34px,3.6vw,52px)">A sparking joint re-ignites twice every mains cycle. Its hiss pulses at 100 Hz.</h2>
+      <p class="mt">The microphone records 3 s. Taar keeps only the 4–16 kHz band where arc noise lives, takes the envelope, and asks how much of that envelope pulses at 100 Hz compared with 20–400 Hz. Loudness cancels out, so one threshold serves a quiet cupboard and a plant room.</p>
+      <div class="row mt2" style="gap:12px; flex-wrap:wrap">
+        <button class="btn ghost on" data-arc="quiet">Quiet room</button>
+        <button class="btn ghost" data-arc="speech">Speech</button>
+        <button class="btn ghost" data-arc="ballast">Ballast hum</button>
+        <button class="btn mg" data-arc="arc">Arc</button>
+      </div>
+      <table class="mt2">
+        <tr><th>False alarms on</th><th>Loudness detector</th><th>100 Hz detector</th></tr>
+        <tr><td>Ballast hum</td><td class="mono hl-m">100%</td><td class="mono hl-l">4%</td></tr>
+        <tr><td>Speech</td><td class="mono hl-m">100%</td><td class="mono hl-l">6%</td></tr>
+        <tr><td>Keys, sleeve rustle</td><td class="mono hl-m">100%</td><td class="mono hl-l">10%</td></tr>
+        <tr><td>Motor</td><td class="mono hl-m">100%</td><td class="mono hl-l">5%</td></tr>
+      </table>
+      <p class="mt" style="font-size:14px">Same lesson as the magnetometer, reached independently: do not measure energy, measure energy locked to the grid.</p>
+    </div>
+    <div style="display:grid; grid-template-rows: 1fr 1fr; gap:14px; height:560px">
+      <div class="canvasbox"><canvas id="cv-arc"></canvas><div class="readout">microphone, 4–16 kHz band · envelope in yellow</div></div>
+      <div class="canvasbox"><canvas id="cv-arcspec"></canvas><div class="readout">envelope spectrum 20–400 Hz · 100 Hz share <b id="p4-mi">3%</b></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════ 9 · MEASURED ═══════════════ -->
+<section class="slide yellow" data-section="Evidence">
+  <div class="eyebrow">07 · Measured on hardware, not assumed</div>
+  <h2>Same phone. Same cable. One switch.</h2>
+  <div class="split mt" style="grid-template-columns: 1.2fr 1fr">
+    <div class="canvasbox" style="height:440px; background:#14110a; border-color:rgba(0,0,0,.25)"><canvas id="cv-kettle"></canvas><div class="readout" style="color:#d9c77a">13 captures · 1200 W kettle cord (≈5.2 A) · phone lying still on the cord</div></div>
+    <div>
+      <dl>
+        <div class="kv" style="border-color:rgba(0,0,0,.18)"><dt style="color:#4a3f10">No current, 8 captures</dt><dd>3× 1× 6× 3× 0× 4× 5× 7×</dd></div>
+        <div class="kv" style="border-color:rgba(0,0,0,.18)"><dt style="color:#4a3f10">Kettle boiling, 5 captures</dt><dd><b>28× 37× 43× 58× 62×</b></dd></div>
+        <div class="kv" style="border-color:rgba(0,0,0,.18)"><dt style="color:#4a3f10">Separation</dt><dd>factor of 4, no overlap</dd></div>
+        <div class="kv" style="border-color:rgba(0,0,0,.18)"><dt style="color:#4a3f10">Sensor rate on the iQOO</dt><dd>105.3 Hz · 21 phases</dd></div>
+        <div class="kv" style="border-color:rgba(0,0,0,.18)"><dt style="color:#4a3f10">Noise floor, two sessions</dt><dd>0.39–0.40 µT RMS</dd></div>
+        <div class="kv" style="border-color:rgba(0,0,0,.18)"><dt style="color:#4a3f10">Earlier fridge test</dt><dd>9×, 16× running · 2–3× idle</dd></div>
+      </dl>
+      <p class="mt2" style="font-size:17px"><strong>Every threshold in the app comes from these numbers.</strong> Under 8× is no current, over 13.5× is current flowing, between is reported as unclear rather than guessed.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════ 10 · THE SOLUTION · flow ═══════════════ -->
+<section class="slide bgglow" data-section="Solution">
+  <div class="eyebrow">08 · The solution · Four taps to a result</div>
+  <h2>Set up once. Then three seconds per wire.</h2>
+  <div class="row mt2" style="gap:44px; align-items:flex-start; flex:1; min-height:0">
+    <div class="fill">
+      <div class="steps" id="flow-steps">
+        <div class="step on" data-i="0"><div class="n">STEP 1 · ONCE</div><h3>Phone check</h3><p>3 s flat on a table. Measures the real sensor rate, picks a safe one, reads the noise floor, checks the mic.</p></div>
+        <div class="step" data-i="1"><div class="n">STEP 2 · ONCE PER BOARD</div><h3>Name the circuits</h3><p>One board, its breakers. Type the rating printed on each, e.g. B16, so Taar can warn near the limit.</p></div>
+        <div class="step" data-i="2"><div class="n">STEP 3 · ONCE PER WIRE</div><h3>Record its normal</h3><p>3 quick captures with the wire in its everyday state. Every later reading is compared with this.</p></div>
+        <div class="step" data-i="3"><div class="n">EVERY TIME</div><h3>Measure</h3><p>Say if the supply is on or off. Press the phone flat on the cable, hold still for 3 s. One combined result, spoken aloud.</p></div>
+      </div>
+      <div class="card mt2 accent-y" id="flow-detail">
+        <h3 class="hl-y">Why a phone check first</h3>
+        <p>Because 100 Hz, the Android default, cannot see 50 Hz. Taar measures what the sensor really delivers, moves it to a safe rate if needed, and shows the number to the user. It refuses to measure on a sensor it has not checked.</p>
+      </div>
+    </div>
+    <div class="phone" id="flow-phone"></div>
+  </div>
+</section>
+
+<!-- ═══════════════ 11 · THE RESULT ═══════════════ -->
+<section class="slide" data-section="Solution">
+  <div class="eyebrow">09 · The result · One answer, every signal behind it</div>
+  <h2 style="font-size:clamp(34px,3.6vw,52px)">Explainable sensor fusion. It says what was observed, never “safe”.</h2>
+  <div class="pipe">
+    <div class="node"><span class="t hl-c">sensor</span><b>Magnetometer</b><small>3 s at a safe rate, per-axis 50 Hz sine fit, contrast vs neighbours</small></div>
+    <div class="node"><span class="t hl-m">sensor</span><b>Microphone</b><small>4–16 kHz envelope, 100 Hz modulation index, 89 features for the AI</small></div>
+    <div class="node"><span class="t hl-v">sensor</span><b>Gyroscope</b><small>Did the phone turn during the capture? Then the reading is unreliable, not interpreted</small></div>
+    <div class="node"><span class="t hl-y">domain</span><b>Reference + rules</b><small>Median and MAD against this wire's own normal. Six warnings, each with evidence and an action</small></div>
+    <div class="node"><span class="t hl-l">domain</span><b>Fusion</b><small>12 named outcomes. Evidence strength counts the signals that agree, and shows where they disagree</small></div>
+  </div>
+  <div class="grid2 mt2" style="gap:28px">
+    <div>
+      <h3 class="hl-y">The six warnings, each ending in an action</h3>
+      <div class="mt" style="margin-top:12px">
+        <div class="check no"><i>!</i><span><strong>Current on a circuit you switched off.</strong> Stop. Mislabelled breaker or back-feed. Do not work on it.</span></div>
+        <div class="check no"><i>!</i><span><strong>Possible arcing / loose connection.</strong> Isolate and have the terminations checked.</span></div>
+        <div class="check no"><i>!</i><span><strong>Load at or above breaker rating.</strong> Move load or have the circuit uprated.</span></div>
+        <div class="check no"><i>!</i><span><strong>Load higher than usual.</strong> If you just switched something on, expected. If not, check what was added.</span></div>
+        <div class="check no"><i>!</i><span><strong>Can't confirm the switched-off circuit.</strong> Keep still and measure again. Do not assume.</span></div>
+        <div class="check no"><i>!</i><span><strong>Reading not usable.</strong> Re-run the phone check and capture again.</span></div>
+      </div>
+    </div>
+    <div>
+      <h3 class="hl-l">Three rules that never bend</h3>
+      <div class="mt" style="margin-top:12px">
+        <div class="check ok"><i>✓</i><span><strong>Refuse rather than guess.</strong> No reference, an unclear signal or a moved phone gives a refusal, not a plausible number.</span></div>
+        <div class="check ok"><i>✓</i><span><strong>A warning only fires when every condition holds.</strong> A partial match is a different situation, not a weak diagnosis.</span></div>
+        <div class="check ok"><i>✓</i><span><strong>Amperes only when calibrated.</strong> Otherwise a relative index. A fabricated ampere figure is worse than none.</span></div>
+      </div>
+      <div class="card mt accent-l" style="margin-top:18px"><p><strong>Tap “Why”</strong> on any result and every signal is listed with its verdict: supports, against, neutral or unavailable. A technician can disagree with the tool on site, because the tool showed its working.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════ 12 · FEATURES ═══════════════ -->
+<section class="slide bgglow-l" data-section="Features">
+  <div class="eyebrow">10 · Everything in the app · tap a card</div>
+  <div class="features" id="features">
+    <div class="feat on" data-f="0"><div class="ic"><svg class="ico"><use href="#i-activity"/></svg></div><h4>Measure</h4><small>3 s on the cable → one fused result</small></div>
+    <div class="feat" data-f="1"><div class="ic"><svg class="ico"><use href="#i-trend"/></svg></div><h4>Reference</h4><small>Each wire's own normal, 3 captures</small></div>
+    <div class="feat" data-f="2"><div class="ic"><svg class="ico"><use href="#i-plug"/></svg></div><h4>Amps calibration</h4><small>One kettle turns the index into amperes</small></div>
+    <div class="feat" data-f="3"><div class="ic"><svg class="ico"><use href="#i-rupee"/></svg></div><h4>Cost in rupees</h4><small>What this wire costs a month, TSSPDCL rate</small></div>
+    <div class="feat" data-f="4"><div class="ic"><svg class="ico"><use href="#i-radio"/></svg></div><h4>Geiger Mode</h4><small>Clicks faster near a live wire. No setup.</small></div>
+    <div class="feat" data-f="5"><div class="ic"><svg class="ico"><use href="#i-home"/></svg></div><h4>House View</h4><small>Circuits as rooms, lit by their current</small></div>
+    <div class="feat" data-f="6"><div class="ic"><svg class="ico"><use href="#i-camera"/></svg></div><h4>Board Map</h4><small>Photo of the board, a coloured dot per breaker</small></div>
+    <div class="feat" data-f="7"><div class="ic"><svg class="ico"><use href="#i-search"/></svg></div><h4>Cable Scan</h4><small>Where along a cable the sparking is strongest</small></div>
+    <div class="feat" data-f="8"><div class="ic"><svg class="ico"><use href="#i-volume"/></svg></div><h4>Spoken results</h4><small>Hears the answer, phone facing the wall</small></div>
+    <div class="feat" data-f="9"><div class="ic"><svg class="ico"><use href="#i-mic"/></svg></div><h4>Voice control</h4><small>“Measure kitchen”, “next”, “why?” offline</small></div>
+    <div class="feat" data-f="10"><div class="ic"><svg class="ico"><use href="#i-chat"/></svg></div><h4>Ask Taar AI</h4><small>On-device Qwen explains any result</small></div>
+    <div class="feat" data-f="11"><div class="ic"><svg class="ico"><use href="#i-eye"/></svg></div><h4>See What Taar Sees</h4><small>Live view, signal to result, every 3 s</small></div>
+    <div class="feat" data-f="12"><div class="ic"><svg class="ico"><use href="#i-tag"/></svg></div><h4>Teach Taar</h4><small>Label a reading; thresholds learn per wire</small></div>
+    <div class="feat" data-f="13"><div class="ic"><svg class="ico"><use href="#i-rotate"/></svg></div><h4>Motion check</h4><small>Gyro marks a moved capture unreliable</small></div>
+    <div class="feat" data-f="14"><div class="ic"><svg class="ico"><use href="#i-clock"/></svg></div><h4>History</h4><small>Every reading kept on the phone</small></div>
+    <div class="feat" data-f="15"><div class="ic"><svg class="ico"><use href="#i-wifioff"/></svg></div><h4>Fully offline</h4><small>No INTERNET permission in the manifest</small></div>
+  </div>
+  <div class="featdetail mt" id="featdetail"></div>
+</section>
+
+<!-- ═══════════════ 13 · HOUSE VIEW + GEIGER (showpiece) ═══════════════ -->
+<section class="slide" data-section="Features">
+  <div class="eyebrow">11 · The showpieces · built for the stage, honest to the reading</div>
+  <div class="grid2" style="gap:28px; flex:1; min-height:0; align-items:stretch">
+    <div style="display:flex; flex-direction:column; gap:16px; min-height:0">
+      <h2 style="font-size:clamp(30px,3vw,44px)">House View</h2>
+      <p>Every circuit is a room. A room glows with the current last measured on it, and the wire from the board runs at that current's pace. Drag to turn, tilt and zoom. An unmeasured room stays dark: <strong>nothing moves unless a reading says so.</strong></p>
+      <div class="canvasbox fill" style="min-height:300px"><canvas id="cv-house"></canvas><div class="readout">drag to turn · rooms lit by measured current</div></div>
+    </div>
+    <div style="display:flex; flex-direction:column; gap:16px; min-height:0">
+      <h2 style="font-size:clamp(30px,3vw,44px)">Geiger Mode</h2>
+      <p>The same 50 Hz detector over a 1.2 s sliding window, answering eight times a second. Clicks rise from 1.5 to 25 per second as the contrast climbs from 5× to 30×, on a log scale so a cable feels the same at 2 cm and 6 cm. No reference, no circuit, no setup. <strong>Move the phone along the wall.</strong></p>
+      <div class="canvasbox fill" style="min-height:300px"><canvas id="cv-geiger"></canvas><div class="readout">move your mouse across · the wire is hidden in the wall · <b id="gz">No current nearby</b></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════ 14 · ON-DEVICE AI ═══════════════ -->
+<section class="slide bgglow-c" data-section="AI">
+  <div class="eyebrow">12 · On-device AI · three models, zero bytes uploaded</div>
+  <h2 style="font-size:clamp(34px,3.6vw,52px)">The AI explains. The physics decides.</h2>
+  <div class="grid3 mt2">
+    <div class="card accent-m">
+      <span class="tag hl-m">Arc model · LiteRT (TFLite)</span>
+      <h3 class="mt" style="margin-top:14px">16.6 KB neural network</h3>
+      <p>An MLP over 89 sound features, about 3,400 weights. Trained on 1,157 captures recorded on the iQOO itself: simulated arcs through a speaker, real not-arcs from real rooms. Held out by session, never by clip.</p>
+      <dl class="mt">
+        <div class="kv"><dt>False alarms, rule alone</dt><dd class="hl-m">10.2%</dd></div>
+        <div class="kv"><dt>False alarms, model</dt><dd class="hl-l">0.6%</dd></div>
+        <div class="kv"><dt>Detection</dt><dd>94.8%</dd></div>
+        <div class="kv"><dt>Self-check at every launch</dt><dd>golden rows · 1e-4</dd></div>
+      </dl>
+    </div>
+    <div class="card accent-v">
+      <span class="tag hl-v">Assistant · MediaPipe LLM</span>
+      <h3 class="mt" style="margin-top:14px">Qwen2.5 · 0.5B · int8</h3>
+      <p>A 550 MB language model running on the phone's CPU. Under every result it explains that reading from Taar's own evidence. In the Ask tab it answers questions about the app from 22 built-in notes, chosen by keyword overlap and shown under the answer.</p>
+      <dl class="mt">
+        <div class="kv"><dt>May invent numbers</dt><dd class="hl-m">forbidden by prompt</dd></div>
+        <div class="kv"><dt>May call a wire safe</dt><dd class="hl-m">flagged by regex</dd></div>
+        <div class="kv"><dt>May decide a result</dt><dd class="hl-m">never</dd></div>
+        <div class="kv"><dt>Temperature</dt><dd>0.3</dd></div>
+      </dl>
+    </div>
+    <div class="card accent-c">
+      <span class="tag hl-c">Voice · Vosk en-IN</span>
+      <h3 class="mt" style="margin-top:14px">Offline speech, rules first</h3>
+      <p>Indian-English speech recognition on the phone. A rule parser understands “measure kitchen”, “next”, “how much does the AC cost”, “turn on geiger”. Anything it does not recognise goes to Qwen to rephrase into one of those commands, so <strong>the model can only ever pick an action from the list, never invent one.</strong></p>
+      <dl class="mt">
+        <div class="kv"><dt>Conversation mode</dt><dd>listens again after each reply</dd></div>
+        <div class="kv"><dt>Never by voice</dt><dd>mark supply off · delete</dd></div>
+      </dl>
+    </div>
+  </div>
+  <div class="card mt" style="border-color:rgba(77,255,154,.4)"><p><strong class="hl-l">Plus a fourth learner with no training run at all:</strong> a nearest-centroid classifier fed by the technician's own labels. Mark a reading Normal, Warning or Fault on Tuesday and it is recognised on Wednesday. It rejects the unfamiliar rather than picking the nearest wrong answer, and it sits behind the rules, never in front of them.</p></div>
+</section>
+
+<!-- ═══════════════ 16 · TECH STACK ═══════════════ -->
+<section class="slide" id="stack" data-section="Build">
+  <div class="eyebrow">13 · Tech stack · offline by construction</div>
+  <h2 style="font-size:clamp(34px,3.6vw,52px)">Native Android. No server, no account, no INTERNET permission.</h2>
+  <div class="grid2 mt2" style="gap:36px">
+    <div class="layers">
+      <div class="layer"><b class="hl-c">sensor/</b><span>MagCapture, MagStream, AudioCapture, MotionCapture, CaptureCoordinator on one shared clock. Per-sample timestamps kept.</span></div>
+      <div class="layer"><b class="hl-y">dsp/</b><span>LineFrequency guard, SineFit, LombScargle, Biquad, Fft, ArcDetector, ArcFeatures, Spectrogram. <code>Pure Kotlin, no Android.</code></span></div>
+      <div class="layer"><b class="hl-l">domain/</b><span>Stats, Thresholds, Metrics, FaultCatalogue, RulesEngine, Fusion, Classifier, AmpCalibration, EnergyCost, Geiger, BoardMap, HouseView, CableScan, VoiceCommand, SpokenResult, ProductKnowledge. <code>Pure Kotlin.</code></span></div>
+      <div class="layer"><b class="hl-m">ml/</b><span>ArcModel (LiteRT interpreter + self-check), TaarAssistant (MediaPipe LLM Inference)</span></div>
+      <div class="layer"><b class="hl-v">ui/</b><span>Jetpack Compose, Material 3. Four tabs: Home, Tools, Ask AI, History. Every task screen full-screen.</span></div>
+      <div class="layer"><b>data/</b><span>Append-only, atomic, versioned line store. A capture is the one thing that cannot be retaken.</span></div>
+    </div>
+    <div>
+      <table>
+        <tr><th>Piece</th><th>What we used</th></tr>
+        <tr><td>Language · UI</td><td class="mono">Kotlin · Jetpack Compose · Material 3 · coroutines</td></tr>
+        <tr><td>Android</td><td class="mono">minSdk 26 · targetSdk 35 · Gradle 9.7.1 · JDK 27</td></tr>
+        <tr><td>Arc model runtime</td><td class="mono">Google LiteRT 1.4.2 (TensorFlow Lite)</td></tr>
+        <tr><td>Language model</td><td class="mono">MediaPipe tasks-genai 0.10.35 · Qwen2.5-0.5B-Instruct q8</td></tr>
+        <tr><td>Speech</td><td class="mono">Vosk 0.3.47 · en-IN model · Android TTS</td></tr>
+        <tr><td>Research spikes</td><td class="mono">Python · NumPy · SciPy · TensorFlow (training)</td></tr>
+        <tr><td>Testing</td><td class="mono">golden vectors from the Python spikes · kotlinc verify.sh, no SDK needed</td></tr>
+        <tr><td>APK</td><td class="mono">≈24 MB · arm64 · no INTERNET permission</td></tr>
+      </table>
+      <pre class="mt" style="font-size:12.5px; line-height:1.5; padding:14px 18px"><span class="c">&lt;!-- AndroidManifest.xml · verifiable in thirty seconds --&gt;</span>
+&lt;<span class="k">uses-permission</span> android:name=<span class="s">"android.permission.RECORD_AUDIO"</span> /&gt;
+&lt;<span class="k">uses-permission</span> android:name=<span class="s">"android.permission.VIBRATE"</span> /&gt;
+<span class="c">&lt;!-- android.permission.INTERNET : absent. Nothing to upload. --&gt;</span></pre>
+      <p style="font-size:14.5px; margin-top:10px">Boards live in basements with no signal, a building's circuit map is a security document, and a measurement cannot have a network round trip inside it. Every capture, model and answer runs on the phone.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════ 17 · HOW WE BUILT IT · timeline ═══════════════ -->
+<section class="slide bgglow" data-section="Build">
+  <div class="eyebrow">14 · How we built it · tap a milestone</div>
+  <h2 style="font-size:clamp(34px,3.6vw,52px)">Spike → measure → threshold → build → polish.</h2>
+  <div class="timeline" id="timeline">
+    <div class="tl on" data-t="0"><b>Physics spikes</b><small>Python: can a magnetometer see 50 Hz? Does an arc separate from speech?</small></div>
+    <div class="tl" data-t="1"><b>App skeleton</b><small>Kotlin port, golden tests, sensor capture, pre-check screen</small></div>
+    <div class="tl" data-t="2"><b>First hardware</b><small>4 defects simulation never saw. Fridge, then kettle captures</small></div>
+    <div class="tl" data-t="3"><b>Thresholds</b><small>8× / 13.5× from measured separation. Amps calibration</small></div>
+    <div class="tl" data-t="4"><b>Arc AI + fusion</b><small>Recorded on the iQOO, trained, self-checked. Cable Scan, live view</small></div>
+    <div class="tl" data-t="5"><b>Qwen assistant</b><small>Explains results, Ask tab, product notes. Redesign, English only</small></div>
+    <div class="tl" data-t="6"><b>Stage features</b><small>Geiger, Board Map, spoken results, rupees, voice control</small></div>
+    <div class="tl" data-t="7"><b>House View</b><small>Circuits as rooms, 3D camera, everything lit by a reading</small></div>
+  </div>
+  <div class="card mt accent-y" id="tldetail" style="min-height:110px; margin-top:18px"></div>
+  <h3 class="mt2" style="margin-top:26px">What hardware taught us that simulation could not <span class="muted" style="font-weight:500">· four defects, each now a regression test</span></h3>
+  <div class="grid4 mt" style="gap:14px; margin-top:12px">
+    <div class="card accent-m" style="padding:16px 18px"><span class="tag hl-m">1</span><h3 style="font-size:17px; margin-top:10px">Two Android clocks</h3><p style="font-size:14px">Sensor timestamps include deep sleep; the system clock does not. Every capture returned zero samples.</p></div>
+    <div class="card" style="padding:16px 18px; border-color:rgba(255,138,31,.5)"><span class="tag hl-o">2</span><h3 style="font-size:17px; margin-top:10px">Magnitude erased the signal</h3><p style="font-size:14px">Reducing x, y, z to one length hid a 1 µT wobble behind Earth's 45 µT. Each axis is now fitted separately.</p></div>
+    <div class="card accent-y" style="padding:16px 18px"><span class="tag hl-y">3</span><h3 style="font-size:17px; margin-top:10px">Normalised by total variance</h3><p style="font-size:14px">Hand drift buried the 50 Hz term and reported a real signal as zero. Now measured against neighbouring frequencies.</p></div>
+    <div class="card accent-l" style="padding:16px 18px"><span class="tag hl-l">4</span><h3 style="font-size:17px; margin-top:10px">Guessed thresholds</h3><p style="font-size:14px">The arc floor was five times too small and called a fridge an arcing fault. Every threshold is now set from captures.</p></div>
+  </div>
+</section>
+
+<!-- ═══════════════ 20 · HONEST SCOPE ═══════════════ -->
+<section class="slide yellow" id="scope" data-section="Scope">
+  <div class="eyebrow">15 · Scope, said out loud</div>
+  <h2>What Taar does not do.</h2>
+  <div class="grid2 mt2" style="gap:40px">
+    <div>
+      <div class="check no"><i>✕</i><span><strong>It does not certify.</strong> A triage aid. It does not replace a licensed electrician, a calibrated clamp meter, an insulation tester or a statutory inspection. The result screen says so.</span></div>
+      <div class="check no"><i>✕</i><span><strong>It senses current, not voltage.</strong> A switched-off appliance on a live wire shows no current. Always use a voltage tester before touching anything.</span></div>
+      <div class="check no"><i>✕</i><span><strong>It does not report amperes</strong> unless the circuit has been calibrated against a known load. Otherwise a relative index.</span></div>
+    </div>
+    <div>
+      <div class="check no"><i>✕</i><span><strong>The arc model has never heard a real arc.</strong> It was trained on simulated arcs played through a speaker and recorded on a real phone, with real not-arcs. The pipeline retrains on a dimmer-rig recording unchanged.</span></div>
+      <div class="check no"><i>✕</i><span><strong>It does not know where a cable runs inside a wall.</strong> House View is a diagram the way a metro map is a diagram.</span></div>
+      <div class="check no"><i>✕</i><span><strong>The assistant can be wrong.</strong> It explains from the evidence, never decides, and is flagged when it sounds certain about safety.</span></div>
+    </div>
+  </div>
+  <div class="lede mt2">Judges see a day of projects that claim more than they do. A team that draws its own boundary is the one they remember.</div>
+</section>
+
+<!-- ═══════════════ 21 · DEMO ═══════════════ -->
+<section class="slide bgglow-l" data-section="Demo">
+  <div class="eyebrow">16 · Live demo · 90 seconds on the iQOO, airplane mode visibly on</div>
+  <h2 style="font-size:clamp(34px,3.6vw,52px)">What you are about to see</h2>
+  <div class="grid4 mt2">
+    <div class="card accent-m"><span class="tag hl-m">0:00</span><h3 class="mt" style="margin-top:12px">Geiger sweep</h3><p>Phone along the desk. Clicks rise as it crosses the kettle cord, fall as it leaves. No setup, no reference.</p></div>
+    <div class="card accent-c"><span class="tag hl-c">0:20</span><h3 class="mt" style="margin-top:12px">Kettle off → Measure</h3><p>Contrast under 8×. “No current seen. Normal for this wire.” Spoken aloud.</p></div>
+    <div class="card accent-y"><span class="tag hl-y">0:40</span><h3 class="mt" style="margin-top:12px">Kettle on → Measure</h3><p>Contrast jumps past 13.5×. Amps and rupees a month appear on the calibrated circuit. House View's kitchen lights up.</p></div>
+    <div class="card accent-l"><span class="tag hl-l">1:10</span><h3 class="mt" style="margin-top:12px">Ask it why</h3><p>By voice: “why did you say that?” Qwen explains from the evidence on screen, on the phone, offline.</p></div>
+  </div>
+  <div class="grid2 mt2" style="gap:28px">
+    <div class="card"><p><strong>Safety optics, on purpose.</strong> A power strip and a domestic kettle, never an opened board on a demo floor. Deliberately arcing mains wiring is a fire hazard; the arc signal is shown from a labelled recording, and said so.</p></div>
+    <div class="card"><p><strong>Proof on screen.</strong> Home shows the three pills: Offline, Arc AI on, Assistant on. The phone check shows the measured sensor rate the estimator was chosen from. The manifest is one tap away.</p></div>
+  </div>
+</section>
+
+<!-- ═══════════════ 22 · CLOSING ═══════════════ -->
+<section class="slide bgglow" data-section="Close">
+  <div class="row" style="justify-content:space-between">
+    <span class="eyebrow" style="margin:0">17 · Where this goes</span>
+    <span class="tag hl-c">Taar · తార</span>
+  </div>
+  <div class="fill" style="display:grid; grid-template-columns:1.1fr 1fr; gap:48px; align-items:center">
+    <div>
+      <h2>A ₹5,000 instrument, already in 600 million pockets.</h2>
+      <div class="mt2">
+        <div class="check ok"><i>→</i><span><strong>Real arcs.</strong> A triac-dimmer rig to record genuine line-locked arcs and retrain the same 16.6 KB model.</span></div>
+        <div class="check ok"><i>→</i><span><strong>Estates.</strong> Many boards, months of trend history, a reading that drifts on a wire before it fails.</span></div>
+        <div class="check ok"><i>→</i><span><strong>More fault classes.</strong> Phase imbalance from three conductors read together. Neutral faults. Export a report.</span></div>
+        <div class="check ok"><i>→</i><span><strong>Every home.</strong> The Geiger and House View path needs no training at all. That is the version a family installs.</span></div>
+      </div>
+    </div>
+    <div class="canvasbox" style="height:480px"><canvas id="cv-close"></canvas><div class="readout">the field, still going</div></div>
+  </div>
+  <div class="footer-note">Every number on these slides is traceable to docs/PREFLIGHT.md, spike/dsp, spike/audio, or a test in spike/android. Nothing here is a mock.</div>
+</section>
+
+</div>
+
+<!-- chrome -->
+<div class="chrome">
+  <button class="menubtn" id="menubtn">Menu</button>
+  <span class="section" id="sectionlabel"></span>
+  <div class="progress"><i id="progress"></i></div>
+  <span class="counter" id="counter"></span>
+  <button class="navbtn" id="prev">←</button>
+  <button class="navbtn" id="next">→</button>
+</div>
+<div class="menu" id="menu"><h2>Jump to</h2><ol id="menulist"></ol></div>
+
+<script>
+/* ============================ deck ============================ */
+const slides = [...document.querySelectorAll('.slide')];
+let cur = Math.max(0, Math.min(slides.length - 1, parseInt(location.hash.slice(1) || '0', 10) || 0));
+const titles = slides.map(s => (s.querySelector('h1,h2')?.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 70));
+const menulist = document.getElementById('menulist');
+titles.forEach((t, i) => { const li = document.createElement('li'); li.innerHTML = `<span>${String(i + 1).padStart(2, '0')}</span>${t}`; li.onclick = () => { go(i); toggleMenu(false); }; menulist.appendChild(li); });
+
+function go(i) {
+  cur = (i + slides.length) % slides.length;
+  slides.forEach((s, k) => s.classList.toggle('active', k === cur));
+  document.getElementById('progress').style.width = ((cur + 1) / slides.length * 100) + '%';
+  document.getElementById('counter').textContent = `${cur + 1} / ${slides.length}`;
+  document.getElementById('sectionlabel').textContent = slides[cur].dataset.section || '';
+  history.replaceState(null, '', '#' + cur);
+  resizeAll();
+}
+function toggleMenu(on) { document.getElementById('menu').classList.toggle('open', on ?? !document.getElementById('menu').classList.contains('open')); }
+document.getElementById('prev').onclick = () => go(cur - 1);
+document.getElementById('next').onclick = () => go(cur + 1);
+document.getElementById('menubtn').onclick = () => toggleMenu();
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return;
+  if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') { e.preventDefault(); go(cur + 1); }
+  else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); go(cur - 1); }
+  else if (e.key === 'Home') go(0);
+  else if (e.key === 'End') go(slides.length - 1);
+  else if (e.key.toLowerCase() === 'm') toggleMenu();
+  else if (e.key === 'Escape') toggleMenu(false);
+  else if (e.key.toLowerCase() === 'f') { document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen(); }
+});
+window.addEventListener('resize', resizeAll);
+
+/* ============================ canvas helpers ============================ */
+const canvases = {};
+function cv(id) {
+  if (canvases[id]) return canvases[id];
+  const c = document.getElementById(id); if (!c) return null;
+  const o = { c, ctx: c.getContext('2d'), w: 0, h: 0 };
+  canvases[id] = o; return o;
+}
+function fit(o) {
+  const r = o.c.getBoundingClientRect(); const dpr = Math.min(2, window.devicePixelRatio || 1);
+  if (r.width === 0) return false;
+  const W = Math.round(r.width * dpr), H = Math.round(r.height * dpr);
+  if (o.c.width !== W || o.c.height !== H) { o.c.width = W; o.c.height = H; }
+  o.ctx.setTransform(dpr, 0, 0, dpr, 0, 0); o.w = r.width; o.h = r.height; return true;
+}
+function resizeAll() { Object.values(canvases).forEach(fit); }
+const C = { y: '#ffd60a', c: '#19e6ff', m: '#ff4d8d', l: '#4dff9a', o: '#ff8a1f', v: '#9b7dff', mute: '#4b5680', grid: 'rgba(255,255,255,.07)' };
+let T0 = performance.now();
+const now = () => (performance.now() - T0) / 1000;
+
+function grid(o, step = 40) {
+  const { ctx, w, h } = o; ctx.strokeStyle = C.grid; ctx.lineWidth = 1; ctx.beginPath();
+  for (let x = 0; x < w; x += step) { ctx.moveTo(x, 0); ctx.lineTo(x, h); }
+  for (let y = 0; y < h; y += step) { ctx.moveTo(0, y); ctx.lineTo(w, y); }
+  ctx.stroke();
+}
+
+/* ---------- field rings (cover + close + physics I) ---------- */
+function drawField(id, opts) {
+  const o = cv(id); if (!o || !fit(o)) return; const { ctx, w, h } = o; const t = now();
+  ctx.clearRect(0, 0, w, h); grid(o, 36);
+  const cx = w / 2, cy = h / 2;
+  const I = opts.I ?? 5, r = opts.r ?? 3;
+  const bAt = (d) => 20 * I / d;  // µT at d cm: μ0/2π = 2e-7 T·m/A → 20 µT·cm/A
+  const mainsPhase = Math.sin(2 * Math.PI * 50 * t * 0.06); // slowed 50 Hz for the eye
+  const maxR = Math.min(w, h) * 0.47;
+  const rings = 14;
+  for (let k = 1; k <= rings; k++) {
+    const d = k * (15 / rings); // 1..15 cm
+    const rad = maxR * (d / 15);
+    const b = bAt(d);
+    const a = Math.min(1, b / 45) * (0.55 + 0.45 * Math.abs(mainsPhase));
+    ctx.beginPath(); ctx.arc(cx, cy, rad, 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(255,214,10,${(0.08 + 0.9 * a).toFixed(3)})`; ctx.lineWidth = 1.5 + 4 * a; ctx.stroke();
+    if (Math.abs(d - r) < 0.55) {
+      ctx.beginPath(); ctx.arc(cx, cy, rad, 0, Math.PI * 2); ctx.strokeStyle = C.c; ctx.lineWidth = 2; ctx.setLineDash([6, 6]); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = C.c; ctx.font = '600 13px JetBrains Mono, monospace'; ctx.fillText(`phone at ${r.toFixed(1)} cm → ${b.toFixed(1)} µT`, cx + rad * 0.72 + 8, cy - rad * 0.72);
+    }
+  }
+  // arrows showing direction rotating with the AC sign
+  const dir = mainsPhase >= 0 ? 1 : -1;
+  for (let k = 0; k < 8; k++) {
+    const ang = k * Math.PI / 4 + t * 0.4 * dir; const rad = maxR * 0.55;
+    const x = cx + rad * Math.cos(ang), y = cy + rad * Math.sin(ang);
+    ctx.save(); ctx.translate(x, y); ctx.rotate(ang + Math.PI / 2 * dir);
+    ctx.fillStyle = C.y; ctx.beginPath(); ctx.moveTo(0, -7); ctx.lineTo(5, 5); ctx.lineTo(-5, 5); ctx.closePath(); ctx.fill(); ctx.restore();
+  }
+  // conductor
+  const g = ctx.createRadialGradient(cx, cy, 2, cx, cy, 26);
+  g.addColorStop(0, '#fff'); g.addColorStop(0.4, C.y); g.addColorStop(1, 'rgba(255,214,10,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, 26, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#14110a'; ctx.beginPath(); ctx.arc(cx, cy, 10, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(cx - 5, cy - 5); ctx.lineTo(cx + 5, cy + 5); ctx.moveTo(cx + 5, cy - 5); ctx.lineTo(cx - 5, cy + 5); ctx.stroke();
+  ctx.fillStyle = '#fff'; ctx.font = '700 12px Inter, sans-serif'; ctx.fillText(`I = ${I.toFixed(1)} A · 50 Hz`, cx + 30, cy + 5);
+}
+
+/* ---------- physics II: magnetometer trace + spectrum ---------- */
+let kettle = false;
+document.getElementById('p2-on').onclick = () => setKettle(true);
+document.getElementById('p2-off').onclick = () => setKettle(false);
+function setKettle(on) {
+  kettle = on;
+  document.getElementById('p2-on').className = 'btn' + (on ? '' : ' ghost');
+  document.getElementById('p2-off').className = 'btn' + (on ? ' ghost' : ' ghost on');
+  document.getElementById('p2-state').textContent = on ? 'current flowing' : 'no current';
+}
+// deterministic pseudo-noise
+function hash(n) { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); }
+function magSample(tt, on) {
+  const drift = 1.6 * Math.sin(2 * Math.PI * 0.18 * tt) + 0.9 * Math.sin(2 * Math.PI * 0.05 * tt + 1);
+  const tremor = 0.9 * Math.sin(2 * Math.PI * 9.5 * tt + 0.4 * Math.sin(tt));
+  const noise = (hash(Math.floor(tt * 1000)) - 0.5) * 0.8;
+  const mains = on ? 2.2 * Math.sin(2 * Math.PI * 50 * tt) : 0;
+  return drift + tremor + noise + mains;
+}
+function drawMag() {
+  const o = cv('cv-mag'); if (!o || !fit(o)) return; const { ctx, w, h } = o; const t = now();
+  ctx.clearRect(0, 0, w, h); grid(o, 30);
+  const span = 0.25; // seconds visible, so 50 Hz is visible as ripple
+  ctx.beginPath();
+  for (let x = 0; x < w; x++) {
+    const tt = t + (x / w) * span; const v = magSample(tt, kettle);
+    const y = h / 2 - v * (h / 14);
+    x ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+  }
+  ctx.strokeStyle = kettle ? C.y : C.c; ctx.lineWidth = 2; ctx.stroke();
+  ctx.fillStyle = C.mute; ctx.font = '500 12px JetBrains Mono, monospace'; ctx.fillText('250 ms window · µT', w - 150, h - 12);
+}
+function drawSpec() {
+  const o = cv('cv-spec'); if (!o || !fit(o)) return; const { ctx, w, h } = o; const t = now();
+  ctx.clearRect(0, 0, w, h); grid(o, 30);
+  const f0 = 20, f1 = 80, n = 61; const bw = w / n;
+  const target = kettle ? 40 : 2;
+  const cur = drawSpec.cur = (drawSpec.cur ?? 2) + (target - (drawSpec.cur ?? 2)) * 0.08;
+  document.getElementById('p2-contrast').textContent = cur.toFixed(0) + '×';
+  let base = 0;
+  for (let k = 0; k < n; k++) {
+    const f = f0 + k; let v = 1 + 0.9 * hash(k * 7 + Math.floor(t * 4)) + (f < 30 ? 4 * Math.exp(-(f - 20) / 5) : 0);
+    if (f === 50) v = cur; base = v;
+    const bh = Math.min(h - 30, v * (h / 48));
+    ctx.fillStyle = f === 50 ? (kettle ? C.y : C.c) : (f >= 30 && f <= 48 || f >= 52 && f <= 70) ? 'rgba(155,125,255,.7)' : 'rgba(255,255,255,.25)';
+    ctx.fillRect(k * bw + 1, h - 22 - bh, bw - 2, bh);
+  }
+  ctx.fillStyle = C.mute; ctx.font = '500 12px JetBrains Mono, monospace';
+  [20, 30, 40, 50, 60, 70, 80].forEach(f => ctx.fillText(f + '', (f - f0) * bw - 6, h - 6));
+  ctx.fillStyle = C.v; ctx.fillText('neighbour bands 30–48 · 52–70', 12, h - 30);
+}
+
+/* ---------- physics III: sampling ---------- */
+const p3fs = document.getElementById('p3-fs');
+function gcd(a, b) { return b ? gcd(b, a % b) : a; }
+function p3update() {
+  const fs = +p3fs.value; document.getElementById('p3-fso').textContent = fs + ' Hz';
+  const ph = fs / gcd(fs, 50);
+  document.getElementById('p3-ph').textContent = ph;
+  const v = document.getElementById('p3-v'), e = document.getElementById('p3-err');
+  if (ph < 2) { v.textContent = 'dead'; v.style.color = C.m; e.textContent = '100%'; e.style.color = C.m; }
+  else if (ph === 2) { v.textContent = 'marginal'; v.style.color = C.o; e.textContent = '22%'; e.style.color = C.o; }
+  else { v.textContent = 'fine'; v.style.color = C.l; e.textContent = fs === 24 ? '0.3%' : '<1%'; e.style.color = C.l; }
+  document.getElementById('p3-note').textContent = `${fs} Hz visits ${ph} phase${ph === 1 ? '' : 's'} of the wave`;
+}
+p3fs.oninput = p3update; p3update();
+function drawSample() {
+  const o = cv('cv-sample'); if (!o || !fit(o)) return; const { ctx, w, h } = o; const t = now();
+  ctx.clearRect(0, 0, w, h); grid(o, 36);
+  const fs = +p3fs.value; const cycles = 4; const span = cycles / 50; // seconds shown
+  const amp = h * 0.3, cy = h * 0.42;
+  // true wave
+  ctx.beginPath();
+  for (let x = 0; x <= w; x++) { const tt = x / w * span; const y = cy - amp * Math.sin(2 * Math.PI * 50 * tt); x ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+  ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = 2; ctx.stroke();
+  // samples, phase-offset slowly so the trap is visible
+  const off = (t * 0.15) % (1 / fs);
+  const pts = [];
+  for (let tt = off; tt < span; tt += 1 / fs) pts.push(tt);
+  const ph = fs / gcd(fs, 50);
+  const col = ph < 2 ? C.m : ph === 2 ? C.o : C.l;
+  // fitted sine from the samples (least squares sin+cos at 50 Hz) — the DSP the app does
+  let ss = 0, sc = 0, cc = 0, ys = 0, yc = 0;
+  pts.forEach(tt => { const s = Math.sin(2 * Math.PI * 50 * tt), c = Math.cos(2 * Math.PI * 50 * tt), y = Math.sin(2 * Math.PI * 50 * tt); ss += s * s; sc += s * c; cc += c * c; ys += y * s; yc += y * c; });
+  // detrend (mean-subtract) as the app does
+  const mean = pts.reduce((a, tt) => a + Math.sin(2 * Math.PI * 50 * tt), 0) / Math.max(1, pts.length);
+  ss = sc = cc = ys = yc = 0;
+  pts.forEach(tt => { const s = Math.sin(2 * Math.PI * 50 * tt), c = Math.cos(2 * Math.PI * 50 * tt), y = Math.sin(2 * Math.PI * 50 * tt) - mean; ss += s * s; sc += s * c; cc += c * c; ys += y * s; yc += y * c; });
+  const det = ss * cc - sc * sc; let A = 0, B = 0;
+  if (Math.abs(det) > 1e-6 * Math.max(1, ss * cc)) { A = (ys * cc - yc * sc) / det; B = (yc * ss - ys * sc) / det; }
+  const fitted = Math.hypot(A, B);
+  ctx.beginPath();
+  for (let x = 0; x <= w; x++) { const tt = x / w * span; const y = cy - amp * (A * Math.sin(2 * Math.PI * 50 * tt) + B * Math.cos(2 * Math.PI * 50 * tt)); x ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+  ctx.strokeStyle = col; ctx.lineWidth = 3; ctx.setLineDash([8, 6]); ctx.stroke(); ctx.setLineDash([]);
+  pts.forEach(tt => { const x = tt / span * w, y = cy - amp * Math.sin(2 * Math.PI * 50 * tt); ctx.fillStyle = col; ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI * 2); ctx.fill(); ctx.strokeStyle = '#030611'; ctx.lineWidth = 2; ctx.stroke(); });
+  ctx.fillStyle = '#fff'; ctx.font = '600 14px Inter, sans-serif';
+  ctx.fillText(`${cycles} cycles of 50 Hz · ${pts.length} samples at ${fs} Hz`, 14, h - 44);
+  ctx.fillStyle = col; ctx.fillText(`fitted amplitude: ${(fitted * 100).toFixed(0)}% of true (dashed)`, 14, h - 22);
+}
+
+/* ---------- physics IV: arc ---------- */
+let arcMode = 'quiet';
+document.querySelectorAll('[data-arc]').forEach(b => b.onclick = () => {
+  arcMode = b.dataset.arc;
+  document.querySelectorAll('[data-arc]').forEach(x => x.className = 'btn ' + (x.dataset.arc === 'arc' ? 'mg' : 'ghost') + (x === b && x.dataset.arc !== 'arc' ? ' on' : ''));
+});
+function arcEnvelope(tt, mode) {
+  const n = 0.25 + 0.15 * hash(Math.floor(tt * 700));
+  if (mode === 'arc') { const ph = (tt * 100) % 1; return n + 1.2 * Math.exp(-ph * 14) * (0.7 + 0.3 * hash(Math.floor(tt * 100))); }
+  if (mode === 'speech') { return n + 0.9 * Math.max(0, Math.sin(2 * Math.PI * 4 * tt) * Math.sin(2 * Math.PI * 0.7 * tt + 1)); }
+  if (mode === 'ballast') { return n + 0.15 * Math.sin(2 * Math.PI * 100 * tt); } // tonal, low band: little hf content
+  return n;
+}
+function drawArc() {
+  const o = cv('cv-arc'); if (!o || !fit(o)) return; const { ctx, w, h } = o; const t = now();
+  ctx.clearRect(0, 0, w, h); grid(o, 30);
+  const span = 0.06; const cy = h / 2;
+  // raw band-passed audio: high-frequency carrier times envelope
+  ctx.beginPath();
+  for (let x = 0; x < w; x++) { const tt = t + x / w * span; const env = arcEnvelope(tt, arcMode); const carrier = (hash(Math.floor(tt * 20000)) - 0.5) * 2; const y = cy - env * carrier * (h / 4.2); x ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+  ctx.strokeStyle = 'rgba(25,230,255,.55)'; ctx.lineWidth = 1; ctx.stroke();
+  ctx.beginPath();
+  for (let x = 0; x < w; x++) { const tt = t + x / w * span; const y = cy - arcEnvelope(tt, arcMode) * (h / 4.2); x ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+  ctx.strokeStyle = C.y; ctx.lineWidth = 2.5; ctx.stroke();
+  if (arcMode === 'arc') { ctx.fillStyle = C.m; ctx.font = '600 12px JetBrains Mono, monospace'; ctx.fillText('re-ignition every 10 ms = 100 Hz', w - 250, h - 12); }
+  ctx.fillStyle = C.mute; ctx.font = '500 12px JetBrains Mono, monospace'; ctx.fillText('60 ms window', 12, h - 12);
+}
+function drawArcSpec() {
+  const o = cv('cv-arcspec'); if (!o || !fit(o)) return; const { ctx, w, h } = o; const t = now();
+  ctx.clearRect(0, 0, w, h); grid(o, 30);
+  const n = 76; const bw = w / n; // 20..400 Hz in 5 Hz bins
+  const targetMI = { quiet: 0.03, speech: 0.06, ballast: 0.04, arc: 0.62 }[arcMode];
+  const mi = drawArcSpec.mi = (drawArcSpec.mi ?? 0.03) + (targetMI - (drawArcSpec.mi ?? 0.03)) * 0.1;
+  document.getElementById('p4-mi').textContent = (mi * 100).toFixed(0) + '%';
+  for (let k = 0; k < n; k++) {
+    const f = 20 + k * 5; let v = 0.12 + 0.1 * hash(k * 3 + Math.floor(t * 3));
+    if (arcMode === 'speech') v += 0.5 * Math.exp(-(f - 20) / 25);
+    if (arcMode === 'ballast' && (f === 100 || f === 200)) v += 0.06; // little envelope content in the hf band
+    if (f === 100) v = mi * 1.5; if (arcMode === 'arc' && f === 200) v += 0.25; if (arcMode === 'arc' && f === 300) v += 0.12;
+    const bh = Math.min(h - 30, v * (h - 40));
+    ctx.fillStyle = f === 100 ? (mi > 0.3 ? C.m : C.l) : 'rgba(255,255,255,.28)';
+    ctx.fillRect(k * bw + 1, h - 22 - bh, bw - 2, bh);
+  }
+  ctx.fillStyle = C.mute; ctx.font = '500 12px JetBrains Mono, monospace';
+  [20, 100, 200, 300, 400].forEach(f => ctx.fillText(f + ' Hz', (f - 20) / 5 * bw - 8, h - 6));
+  ctx.strokeStyle = 'rgba(255,77,141,.5)'; ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.moveTo(16 * bw + bw / 2, 8); ctx.lineTo(16 * bw + bw / 2, h - 22); ctx.stroke(); ctx.setLineDash([]);
+}
+
+/* ---------- kettle chart ---------- */
+const OFF = [3, 1, 6, 3, 0, 4, 5, 7], ON = [28, 37, 43, 58, 62];
+function drawKettle() {
+  const o = cv('cv-kettle'); if (!o || !fit(o)) return; const { ctx, w, h } = o; const t = now();
+  ctx.clearRect(0, 0, w, h);
+  const L = 60, R = 24, Tp = 44, B = 40; const pw = w - L - R, ph = h - Tp - B;
+  const yOf = v => Tp + ph - v / 70 * ph;
+  ctx.strokeStyle = 'rgba(255,255,255,.12)'; ctx.fillStyle = '#9a8a4a'; ctx.font = '500 12px JetBrains Mono, monospace';
+  [0, 10, 20, 30, 40, 50, 60, 70].forEach(v => { ctx.beginPath(); ctx.moveTo(L, yOf(v)); ctx.lineTo(w - R, yOf(v)); ctx.stroke(); ctx.fillText(v + '×', 14, yOf(v) + 4); });
+  // thresholds
+  const th = (v, col, label) => { ctx.strokeStyle = col; ctx.setLineDash([6, 5]); ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(L, yOf(v)); ctx.lineTo(w - R, yOf(v)); ctx.stroke(); ctx.setLineDash([]); ctx.fillStyle = col; ctx.font = '700 12px Inter, sans-serif'; ctx.fillText(label, w - R - 190, yOf(v) - 6); };
+  th(8, C.c, 'under 8× · no current'); th(13.5, C.y, 'over 13.5× · current flowing');
+  const all = [...OFF.map(v => ({ v, on: false })), ...ON.map(v => ({ v, on: true }))];
+  const bw = pw / all.length; const reveal = Math.min(1, (t % 12) / 4);
+  all.forEach((d, i) => {
+    const x = L + i * bw + bw * 0.18; const wv = bw * 0.64;
+    const vv = d.v * Math.min(1, Math.max(0, reveal * all.length - i));
+    const top = yOf(vv);
+    ctx.fillStyle = d.on ? C.y : C.c; ctx.beginPath(); ctx.roundRect(x, top, wv, yOf(0) - top, 6); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.font = '700 13px JetBrains Mono, monospace'; if (vv > 0.5 || d.v === 0) ctx.fillText(d.v + '×', x + wv / 2 - 12, top - 8);
+  });
+  ctx.fillStyle = C.c; ctx.font = '700 13px Inter, sans-serif'; ctx.fillText('KETTLE OFF · 8 captures', L, h - 14);
+  ctx.fillStyle = C.y; ctx.fillText('KETTLE ON · 5 captures', L + bw * 8, h - 14);
+}
+
+/* ---------- flow phone mock ---------- */
+const flow = [
+  { title: 'Why a phone check first', body: 'Because 100 Hz, the Android default, cannot see 50 Hz. Taar measures what the sensor really delivers, moves it to a safe rate if needed, and shows the number to the user. It refuses to measure on a sensor it has not checked.',
+    screen: `<div class="title">Phone check</div><div><span class="pill" style="background:#4dff9a;color:#04200f">Offline</span><span class="pill" style="background:#ffd60a;color:#14110a">Arc AI on</span></div>
+      <div class="pcard"><small>Magnetometer</small><div style="font-size:22px;font-weight:700">105.3 Hz</div><small>21 distinct phases · safe</small></div>
+      <div class="pcard"><small>Background noise</small><div style="font-size:22px;font-weight:700">0.40 µT</div><small>phone flat on a table</small></div>
+      <div class="pcard"><small>Microphone</small><div style="font-size:22px;font-weight:700">allowed</div><small>44.1 kHz</small></div>
+      <div class="pbtn">Done · Choose a circuit</div>` },
+  { title: 'Why breaker ratings', body: 'A B16 breaker is a fact printed on the board. Once a circuit is calibrated, Taar compares the measured amperes with that rating and warns at 90%. The same list becomes the rooms of House View and the pins on Board Map.',
+    screen: `<div class="title">Circuits</div><small style="color:var(--muted)">Flat 3B · main board</small>
+      <div class="pcard">Kitchen <small style="float:right">16 A</small></div><div class="pcard">AC bedroom <small style="float:right">20 A</small></div><div class="pcard">Geyser <small style="float:right">16 A</small></div><div class="pcard">Lights <small style="float:right">6 A</small></div>
+      <div class="pbtn">＋ Add circuit</div>` },
+  { title: 'Why a reference, and why three', body: 'Taar reports change against this wire\'s own normal, not against a universal number, because every board and every phone position differs. Three captures give a median and a spread. Median and MAD, never mean and standard deviation: one capture taken while a lift motor started must not move a threshold.',
+    screen: `<div class="title">Record its normal</div><small style="color:var(--muted)">Kitchen · keep the phone still</small>
+      <div class="pcard"><small>Capture 2 of 3</small><div class="bar" style="margin-top:8px"><i style="width:66%"></i></div></div>
+      <div class="pcard"><small>Capture 1</small><div>contrast 31× · current flowing</div></div>
+      <div class="pcard" style="opacity:.5"><small>Capture 3</small><div>—</div></div>
+      <div class="pbtn" style="background:rgba(255,255,255,.12);color:#fff">Recording…</div>` },
+  { title: 'Why one combined result', body: 'The magnetometer, the microphone, the gyroscope, the rules and the AI model each have an opinion. Fusion names an outcome, counts how many signals agree, and shows where they disagree. Spoken aloud, because the phone is facing the wall. On a calibrated circuit, amps and rupees a month follow.',
+    screen: `<div class="title">Result</div><small style="color:var(--muted)">Kitchen · 14:05</small>
+      <div class="status" style="background:rgba(77,255,154,.18);border:1px solid #4dff9a;color:#4dff9a">No anomaly observed<br><small style="color:#cfeee0;font-weight:400">Matches this wire's normal. An observation, not a certificate.</small></div>
+      <div class="pcard"><small>Current</small><div style="font-size:20px;font-weight:700">flowing · 5.1 A</div><small>≈ ₹2,800 / month at 8 h a day</small></div>
+      <div class="pcard"><small>Sparking</small><div>not observed · AI 2%</div></div>
+      <div class="pcard"><small>Evidence strength</small><div>high · 4 of 4 signals agree</div></div>
+      <div class="pbtn"><svg class="ico"><use href="#i-volume"/></svg> Speak · Why?</div>` },
+];
+function setFlow(i) {
+  document.querySelectorAll('#flow-steps .step').forEach(s => s.classList.toggle('on', +s.dataset.i === i));
+  document.getElementById('flow-detail').innerHTML = `<h3 class="hl-y">${flow[i].title}</h3><p>${flow[i].body}</p>`;
+  document.getElementById('flow-phone').innerHTML = `<div class="screen">${flow[i].screen}</div>`;
+}
+document.querySelectorAll('#flow-steps .step').forEach(s => s.onclick = () => setFlow(+s.dataset.i));
+setFlow(0);
+
+/* ---------- features ---------- */
+const FEATS = [
+  ['Measure', 'Pick the circuit, say whether the supply is on or off, press the phone flat on the cable and hold still for 3 seconds. The magnetometer, microphone and gyroscope are captured together on one clock. One fused result comes back with its evidence, and a warning only when every condition for it holds.'],
+  ['Reference', 'Three quick captures of the wire in its normal state, in the spot you will measure from. Taar keeps the median and the spread. Every later reading is scored as a robust z-score against this, so “higher than usual” means higher than this wire, on this phone, in this position.'],
+  ['Amps calibration', 'Measure once with a known appliance off, then on: a 1500 W kettle is about 6.5 A. That fixes µT per ampere for this circuit and position. From then on readings print amperes, and the breaker-limit warning becomes possible. Uncalibrated circuits show a relative index, never a made-up ampere.'],
+  ['Cost in rupees', 'Only on a calibrated circuit. Power is volts × amps, hours a day are a choice (1, 4, 8 or 24), and the rate defaults to TSSPDCL\'s ₹7.70 per unit for a typical Hyderabad home. Rounded to two significant figures with Indian digit grouping, because the current is an estimate and ₹2,127 would claim a precision it does not have.'],
+  ['Geiger Mode', 'A live-wire finder that needs no reference and no circuit. The same 50 Hz detector runs on a 1.2 s sliding window eight times a second, and the contrast drives clicks from 1.5 to 25 per second, plus a vibration tick. “Set quiet here” lifts the floor in a room full of chargers. It only ever says stronger or weaker, never amperes, and silence never means no wire.'],
+  ['House View', 'Every circuit the technician named becomes a room in a small 3D house. A room glows with the current last measured on its circuit and the wire from the board animates at that pace. Drag to turn; full-screen in landscape to tilt and zoom. An unmeasured room stays dark, and the picture never pretends to know where a cable runs inside a wall.'],
+  ['Board Map', 'Photograph the distribution board with the camera, then tap each breaker to pin its circuit. Each pin shows a dot coloured by the latest result: Problem, Check, Measure again, Current flowing, No current seen, Not measured. Grey means no current was seen, never that the wire is dead.'],
+  ['Cable Scan', 'Hold still for 3 s, slide one hand-width, repeat. Each point is a full measurement. Because current is the same all along a cable, the location comes from sound: the 100 Hz arc pattern stands further above room noise near its source. Single noisy points and moved captures are discarded. It shows a zone to inspect, not an exact fault.'],
+  ['Spoken results', 'The phone is pressed against a cable facing the wall, so the result is spoken through the phone\'s own text-to-speech: circuit name, outcome, amps, rupees. It leads with a warning when there is one and reminds that the phone senses current, not voltage, when a switched-off circuit reads clean.'],
+  ['Voice control', 'Vosk Indian-English recognition, fully offline. “Measure kitchen”, “record normal”, “next”, “why”, “what should I do”, “how much does the AC cost”, “turn on geiger”, “add circuit called pump”. A tap on the mic starts a conversation that listens again after each reply, so a whole board is done hands-free. Anything the rules do not know is rephrased by the on-device model into one of these commands. Marking a supply off or deleting a circuit is never offered by voice.'],
+  ['Ask Taar AI', 'Qwen2.5-0.5B-Instruct, int8, through MediaPipe LLM Inference on the phone. Under a result it explains that reading from the fusion evidence only, in at most five sentences. In the Ask tab it answers questions about the app from 22 built-in notes chosen by keyword overlap, and shows which notes it used. A regex flags any answer that sounds certain about safety.'],
+  ['See What Taar Sees', 'A live view of the whole chain every 3 seconds: the magnetic signal folded onto one 50 Hz cycle, the sound and its envelope, the spectrum the AI reads, each processing step and the fusion result. Nothing on it is simulated; every plot is the detector\'s own numbers. It saves nothing.'],
+  ['Teach Taar', 'Mark any reading Normal, Warning or Fault. The labels tune that circuit\'s warning limits, and a nearest-centroid classifier learns which readings look like the ones you marked. It rejects the unfamiliar rather than picking the nearest wrong answer, and it sits behind the rules, never in front of them. Practice readings can be excluded.'],
+  ['Motion check', 'The gyroscope watches the 3 seconds. If the phone turned, the reading is marked unreliable and not interpreted at all, because a moving phone drifts through Earth\'s field by more than the signal. A steady hand is fine. Unclear current, no sound captured or a processed microphone lower the quality to fair.'],
+  ['History', 'Every measurement is saved on the phone with its time, circuit and result, in an append-only, atomically written, versioned line format. A capture is the one thing that cannot be retaken, so the store is designed never to lose one.'],
+  ['Fully offline', 'No INTERNET permission in the manifest. No account, no server, no analytics. The 550 MB language model is copied to the phone once by the user, never downloaded by the app. Readings, models and history never leave the device. The only permission asked for is the microphone.'],
+];
+function setFeat(i) {
+  document.querySelectorAll('#features .feat').forEach(f => f.classList.toggle('on', +f.dataset.f === i));
+  document.getElementById('featdetail').innerHTML = `<h3>${FEATS[i][0]}</h3><p>${FEATS[i][1]}</p>`;
+}
+document.querySelectorAll('#features .feat').forEach(f => { f.onclick = () => setFeat(+f.dataset.f); f.onmouseenter = () => setFeat(+f.dataset.f); });
+setFeat(0);
+
+/* ---------- house view (mini 3D) ---------- */
+const rooms = [
+  { name: 'Kitchen', kind: 'Heating', level: 0.9, col: C.y }, { name: 'AC bedroom', kind: 'Cooling', level: 0.55, col: C.c },
+  { name: 'Geyser', kind: 'Heating', level: 0, col: '#334' }, { name: 'Lights', kind: 'Lights', level: 0.25, col: C.l },
+  { name: 'Pump', kind: 'Motor', level: 0, col: '#334' }, { name: 'Hall', kind: '', level: 0.4, col: C.v },
+];
+let houseYaw = 0.6, dragging = false, lastX = 0;
+{ const c = document.getElementById('cv-house');
+  c.addEventListener('mousedown', e => { dragging = true; lastX = e.clientX; });
+  window.addEventListener('mouseup', () => dragging = false);
+  window.addEventListener('mousemove', e => { if (dragging) { houseYaw += (e.clientX - lastX) * 0.01; lastX = e.clientX; } }); }
+function drawHouse() {
+  const o = cv('cv-house'); if (!o || !fit(o)) return; const { ctx, w, h } = o; const t = now();
+  ctx.clearRect(0, 0, w, h);
+  const yaw = houseYaw + (dragging ? 0 : Math.sin(t * 0.25) * 0.15), pitch = 0.62;
+  const proj = (x, y, z) => { // x right, y depth, z up (world) → screen
+    const cx = x * Math.cos(yaw) - y * Math.sin(yaw), cy = x * Math.sin(yaw) + y * Math.cos(yaw);
+    const sy = cy * Math.cos(pitch) - z * Math.sin(pitch); const depth = cy * Math.sin(pitch) + z * Math.cos(pitch);
+    const s = 1 / (1 + depth * 0.08);
+    return [w / 2 + cx * s * (Math.min(w, h) / 6.2), h / 2 + 10 + sy * s * (Math.min(w, h) / 6.2), depth];
+  };
+  const cols = 3, cw = 1.6, cd = 1.4, wh = 0.9;
+  const cells = rooms.map((r, i) => { const gx = (i % cols - 1) * cw, gy = (Math.floor(i / cols) - 0.5) * cd; return { r, gx, gy, depth: proj(gx, gy, 0)[2] }; }).sort((a, b) => b.depth - a.depth);
+  // board + wires
+  const board = [0, -2.2, 0];
+  ctx.lineWidth = 3;
+  cells.forEach(({ r, gx, gy }) => {
+    const [bx, by] = proj(...board); const [rx, ry] = proj(gx, gy, 0.05);
+    ctx.strokeStyle = r.level > 0 ? r.col : 'rgba(255,255,255,.12)'; ctx.setLineDash(r.level > 0 ? [10, 8] : []); ctx.lineDashOffset = -t * 60 * r.level; ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(rx, ry); ctx.stroke(); ctx.setLineDash([]);
+  });
+  cells.forEach(({ r, gx, gy }) => {
+    const x0 = gx - cw * 0.44, x1 = gx + cw * 0.44, y0 = gy - cd * 0.42, y1 = gy + cd * 0.42;
+    const P = (x, y, z) => proj(x, y, z).slice(0, 2);
+    const glow = r.level * (0.75 + 0.25 * Math.sin(t * 3 + gx));
+    // floor
+    const floor = [P(x0, y0, 0), P(x1, y0, 0), P(x1, y1, 0), P(x0, y1, 0)];
+    ctx.fillStyle = r.level > 0 ? hexA(r.col, 0.25 + 0.5 * glow) : 'rgba(255,255,255,.05)'; poly(ctx, floor);
+    ctx.strokeStyle = r.level > 0 ? r.col : 'rgba(255,255,255,.2)'; ctx.lineWidth = 1.5; ctx.stroke();
+    // walls (two visible edges)
+    const wall1 = [P(x0, y1, 0), P(x1, y1, 0), P(x1, y1, wh), P(x0, y1, wh)];
+    const wall2 = [P(x1, y0, 0), P(x1, y1, 0), P(x1, y1, wh), P(x1, y0, wh)];
+    ctx.fillStyle = r.level > 0 ? hexA(r.col, 0.12 + 0.25 * glow) : 'rgba(255,255,255,.04)'; poly(ctx, wall1); ctx.stroke(); poly(ctx, wall2); ctx.stroke();
+    const [lx, ly] = P(gx, gy, wh + 0.25);
+    ctx.fillStyle = r.level > 0 ? '#fff' : 'rgba(255,255,255,.45)'; ctx.font = '700 13px Inter, sans-serif'; ctx.textAlign = 'center'; ctx.fillText(r.name, lx, ly);
+    ctx.fillStyle = r.level > 0 ? r.col : 'rgba(255,255,255,.3)'; ctx.font = '500 11px JetBrains Mono, monospace'; ctx.fillText(r.level > 0 ? `${(r.level * 7).toFixed(1)} A` : 'not measured', lx, ly + 14); ctx.textAlign = 'left';
+  });
+  const [bx, by] = proj(...board); ctx.fillStyle = '#fff'; ctx.fillRect(bx - 16, by - 10, 32, 20); ctx.fillStyle = '#070b18'; ctx.font = '700 10px Inter, sans-serif'; ctx.fillText('BOARD', bx - 15, by + 4);
+}
+function poly(ctx, pts) { ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.closePath(); ctx.fill(); }
+function hexA(hex, a) { const n = parseInt(hex.slice(1), 16); return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`; }
+
+/* ---------- geiger ---------- */
+let gx = 0.15; let gClickPhase = 0, gLast = 0;
+{ const c = document.getElementById('cv-geiger'); c.addEventListener('mousemove', e => { const r = c.getBoundingClientRect(); gx = (e.clientX - r.left) / r.width; }); }
+const geigerLevel = (x) => { const d = Math.abs(x - 0.68); const contrast = 2 + 60 * Math.exp(-(d * d) / 0.006); const q = 5, f = 30; return contrast <= q ? 0 : Math.min(1, Math.log(contrast / q) / Math.log(f / q)); };
+const clicks = [];
+function drawGeiger() {
+  const o = cv('cv-geiger'); if (!o || !fit(o)) return; const { ctx, w, h } = o; const t = now();
+  ctx.clearRect(0, 0, w, h);
+  // wall with hidden wire
+  ctx.fillStyle = '#0c1226'; ctx.fillRect(0, 0, w, h);
+  for (let y = 0; y < h; y += 26) for (let x = ((y / 26) % 2) * 30; x < w; x += 60) { ctx.strokeStyle = 'rgba(255,255,255,.05)'; ctx.strokeRect(x, y, 58, 24); }
+  const lvl = geigerLevel(gx);
+  const cps = lvl <= 0 ? 0 : 1.5 + (25 - 1.5) * lvl * lvl;
+  if (cps > 0 && t - gLast > 1 / cps) { gLast = t; clicks.push(t); }
+  while (clicks.length && t - clicks[0] > 1.5) clicks.shift();
+  // hidden wire faint reveal proportional to level
+  ctx.strokeStyle = `rgba(255,214,10,${0.05 + 0.8 * lvl})`; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(w * 0.68, 0); ctx.lineTo(w * 0.68, h); ctx.stroke();
+  // phone
+  const px = gx * w; const pw = 46, ph2 = 92; const py = h * 0.45;
+  ctx.fillStyle = '#1b2340'; ctx.beginPath(); ctx.roundRect(px - pw / 2, py - ph2 / 2, pw, ph2, 10); ctx.fill(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke();
+  ctx.fillStyle = lvl > 0.6 ? C.m : lvl > 0 ? C.o : C.l; ctx.beginPath(); ctx.roundRect(px - pw / 2 + 6, py - ph2 / 2 + 8, pw - 12, ph2 - 16, 6); ctx.fill();
+  // click ripples
+  clicks.forEach(ct => { const age = t - ct; ctx.strokeStyle = `rgba(255,255,255,${Math.max(0, 0.7 - age)})`; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(px, py, 40 + age * 120, 0, Math.PI * 2); ctx.stroke(); });
+  // meter
+  const mw = w - 60; ctx.fillStyle = 'rgba(255,255,255,.1)'; ctx.beginPath(); ctx.roundRect(30, h - 46, mw, 14, 7); ctx.fill();
+  const g = ctx.createLinearGradient(30, 0, 30 + mw, 0); g.addColorStop(0, C.l); g.addColorStop(0.6, C.o); g.addColorStop(1, C.m);
+  ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(30, h - 46, mw * lvl, 14, 7); ctx.fill();
+  ctx.fillStyle = '#fff'; ctx.font = '600 13px JetBrains Mono, monospace'; ctx.fillText(`${cps.toFixed(1)} clicks / s`, 30, h - 56);
+  const zone = lvl <= 0 ? 'No current nearby · move slowly along the wall' : lvl < 0.6 ? 'Current nearby · follow the faster clicks' : 'Very close to a wire carrying current';
+  document.getElementById('gz').textContent = zone;
+}
+
+/* ---------- timeline ---------- */
+const TL = [
+  ['Physics spikes, before any app code', 'Two Python spikes answered the questions that would otherwise eat event hours. The DSP spike found the risk had been misdiagnosed: not a slow sensor, but a sample rate locked to 50 Hz. The audio spike showed a loudness detector fires on every confounder and a 100 Hz modulation index holds its 5% design point. Both produced golden CSVs the Kotlin is tested against.'],
+  ['Kotlin port with golden tests', 'sensor/, dsp/, domain/ and the first screens. Filter coefficients emitted from Python, never retyped. A framework-free assertion file called by both JUnit and a kotlinc script, so the checks run on a laptop without an Android SDK. Perturbing one golden value by 0.001 µT fails the build.'],
+  ['First run on the iQOO', 'Every capture returned nothing: two Android clocks. Then vector magnitude hid the signal behind Earth\'s field. Then variance normalisation buried it under hand drift. Then a guessed arc floor called a fridge a fault. Four regression tests later, the fridge read 9× and 16× running against 2–3× idle, and a kettle read 28–62× against 0–7×.'],
+  ['Thresholds and amperes from measurement', 'No current under 8×, flowing over 13.5×, unclear between, all from the kettle separation. Amps calibration against an appliance of known power. Isolation warnings rewired to hinge on what the technician says about the breaker, because a kettle switching on had looked like a back-feed.'],
+  ['On-device arc model, fusion, cable scan, live view', '1,157 captures recorded on the phone: simulated arcs through a speaker, real not-arcs from real rooms, split by session. A 16.6 KB TFLite MLP that cut false alarms from 10% to under 1%, with a self-check at every launch. Explainable fusion over 12 outcomes. Cable Scan and See What Taar Sees.'],
+  ['Qwen assistant, Ask tab, redesign', 'Qwen2.5-0.5B on the CPU through MediaPipe, explaining a result from the fusion evidence only, with a regex guard for over-confident safety talk. A general Ask tab answering from 22 product notes. The whole app redesigned around one Home screen with a 3-step checklist, and every string moved to English.'],
+  ['Geiger, Board Map, spoken results, rupees, voice', 'A live-wire finder on a 1.2 s window. A board photo with a coloured dot per breaker. Text-to-speech results. Monthly cost in rupees at the TSSPDCL rate. Vosk offline voice with a rules-first parser and the model only allowed to rephrase into a known command. Conversation mode for a hands-free round of a board.'],
+  ['House View', 'Circuits as the rooms of a small 3D house, lit by their last measured current, wires animating at that pace, a camera that turns, tilts and zooms. Built for the stage, honest to the reading: nothing moves unless a measurement says so.'],
+];
+function setTL(i) {
+  document.querySelectorAll('#timeline .tl').forEach(x => x.classList.toggle('on', +x.dataset.t === i));
+  document.getElementById('tldetail').innerHTML = `<h3 class="hl-y">${TL[i][0]}</h3><p>${TL[i][1]}</p>`;
+}
+document.querySelectorAll('#timeline .tl').forEach(x => { x.onclick = () => setTL(+x.dataset.t); x.onmouseenter = () => setTL(+x.dataset.t); });
+setTL(0);
+
+/* ============================ loop ============================ */
+function frame() {
+  const s = slides[cur];
+  if (s.querySelector('#cv-cover')) drawField('cv-cover', { I: 5, r: 3 });
+  if (s.querySelector('#cv-close')) drawField('cv-close', { I: 5, r: 3 });
+  if (s.querySelector('#cv-mag')) { drawMag(); drawSpec(); }
+  if (s.querySelector('#cv-sample')) drawSample();
+  if (s.querySelector('#cv-arc')) { drawArc(); drawArcSpec(); }
+  if (s.querySelector('#cv-kettle')) drawKettle();
+  if (s.querySelector('#cv-house')) { drawHouse(); drawGeiger(); }
+  requestAnimationFrame(frame);
+}
+go(cur);
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
